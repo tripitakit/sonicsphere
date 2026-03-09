@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sonic Sphere</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-void: #000000;
+      --bg-deep: #031021;
+      --bg-mid: #0b1f35;
+      --bg-accent: #1a4762;
+      --line-soft: rgba(120, 186, 224, 0.26);
+      --line-strong: rgba(150, 214, 249, 0.52);
+      --text-main: #d7f1ff;
+      --text-subtle: rgba(182, 219, 244, 0.76);
+      --text-dim: rgba(144, 188, 216, 0.54);
+    }
+
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    #canvas-container { width: 100%; height: 100%; }
+
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(1200px 760px at 18% 12%, rgba(20, 90, 132, 0.26), transparent 68%),
+        radial-gradient(900px 560px at 80% 82%, rgba(15, 60, 94, 0.30), transparent 72%),
+        linear-gradient(160deg, var(--bg-deep), var(--bg-void) 58%);
+      cursor: pointer;
+      z-index: 10;
+      transition: opacity 0.85s ease;
+      overflow: hidden;
+    }
+
+    #start-overlay::before {
+      content: '';
+      position: absolute;
+      inset: -24%;
+      background:
+        repeating-radial-gradient(
+          circle at 50% 50%,
+          rgba(95, 156, 194, 0.055) 0 2px,
+          transparent 2px 18px
+        );
+      opacity: 0.32;
+      transform: rotate(-9deg);
+      animation: drift 28s linear infinite;
+      pointer-events: none;
+    }
+
+    #start-overlay::after {
+      content: '';
+      position: absolute;
+      width: min(86vmin, 760px);
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      border: 1px solid var(--line-soft);
+      box-shadow:
+        0 0 0 1px rgba(96, 163, 203, 0.14),
+        0 0 110px rgba(53, 126, 168, 0.20),
+        0 0 220px rgba(39, 102, 142, 0.24),
+        0 0 360px rgba(26, 78, 112, 0.22),
+        inset 0 0 80px rgba(47, 120, 166, 0.16);
+      opacity: 0.72;
+      animation: haloPulse 7.6s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .overlay-panel {
+      position: relative;
+      z-index: 1;
+      width: min(92vw, 760px);
+      padding: clamp(1.3rem, 2.7vw, 2.1rem) clamp(1rem, 3vw, 2.2rem);
+      display: grid;
+      gap: 0.9rem;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .overlay-kicker {
+      font-family: 'Space Mono', 'IBM Plex Mono', 'Menlo', monospace;
+      font-size: clamp(0.66rem, 0.9vw, 0.76rem);
+      letter-spacing: 0.36em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    #overlay-title {
+      font-family: 'Cinzel', 'Iowan Old Style', 'Palatino Linotype', serif;
+      font-size: clamp(2rem, 7.4vw, 4.9rem);
+      letter-spacing: 0.17em;
+      text-transform: uppercase;
+      line-height: 0.95;
+      color: var(--text-main);
+      text-shadow:
+        0 0 24px rgba(132, 201, 235, 0.20),
+        0 0 3px rgba(210, 239, 255, 0.32);
+    }
+
+    .overlay-divider {
+      width: min(72%, 430px);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+      opacity: 0.8;
+    }
+
+    #start-overlay .hint {
+      display: block;
+      font-family: 'Sora', 'Avenir Next', 'Futura', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      color: var(--text-subtle);
+      line-height: 1.35;
+    }
+
+    #overlay-hint-primary {
+      margin-top: 0.18rem;
+      padding: 0.62rem 1.08rem;
+      border-radius: 999px;
+      border: 1px solid var(--line-strong);
+      background: rgba(27, 69, 98, 0.22);
+      font-size: clamp(0.62rem, 1.6vw, 0.78rem);
+      color: #ebf8ff;
+      box-shadow:
+        0 0 0 1px rgba(33, 87, 123, 0.24) inset,
+        0 0 20px rgba(50, 130, 176, 0.18);
+      animation: ctaPulse 2.6s ease-in-out infinite;
+    }
+
+    #overlay-hint-controls {
+      margin-top: 0.28rem;
+      font-size: clamp(0.56rem, 1.3vw, 0.67rem);
+      letter-spacing: 0.18em;
+      color: var(--text-dim);
+    }
+
+    .overlay-headphones {
+      margin-top: 0.26rem;
+      font-size: clamp(0.56rem, 1.2vw, 0.66rem);
+      letter-spacing: 0.2em;
+      color: rgba(177, 219, 245, 0.65);
+    }
+
+    .overlay-footnote {
+      margin-top: 0.26rem;
+      font-family: 'Space Mono', 'IBM Plex Mono', 'Menlo', monospace;
+      font-size: clamp(0.52rem, 1vw, 0.6rem);
+      letter-spacing: 0.22em;
+      color: rgba(129, 173, 202, 0.46);
+    }
+
+    #start-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @keyframes drift {
+      0% { transform: rotate(-9deg) translate3d(0, 0, 0); }
+      50% { transform: rotate(-7deg) translate3d(0, -1.2%, 0); }
+      100% { transform: rotate(-9deg) translate3d(0, 0, 0); }
+    }
+
+    @keyframes haloPulse {
+      0%, 100% { transform: scale(0.983); opacity: 0.62; }
+      50% { transform: scale(1.02); opacity: 0.84; }
+    }
+
+    @keyframes ctaPulse {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(33, 87, 123, 0.24) inset, 0 0 20px rgba(50, 130, 176, 0.18); }
+      50% { box-shadow: 0 0 0 1px rgba(78, 155, 199, 0.34) inset, 0 0 32px rgba(77, 166, 216, 0.24); }
+    }
+
+    @media (max-width: 640px) {
+      .overlay-panel {
+        width: min(92vw, 640px);
+      }
+      #overlay-title {
+        letter-spacing: 0.11em;
+      }
+      #overlay-hint-controls,
+      .overlay-headphones {
+        letter-spacing: 0.12em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="start-overlay">
+    <div class="overlay-panel">
+      <span class="overlay-kicker">immersive generative audioscape</span>
+      <span id="overlay-title">Sonic Sphere</span>
+      <span class="overlay-divider"></span>
+      <span class="hint" id="overlay-hint-primary">click to enter</span>
+      <span class="hint" id="overlay-hint-controls">WASD move | P autopilot | ESC pause</span>
+      <span class="hint overlay-headphones">headphones recommended</span>
+      <span class="overlay-footnote">explore by listening</span>
+    </div>
+  </div>
+  <div id="canvas-container"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
