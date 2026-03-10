@@ -2,7 +2,7 @@ import type { SphericalCoord, CartesianCoord } from '../types.ts';
 
 // Physical sphere radius (world-space units). Increased to enlarge world surface
 // and reduce source density per unit area.
-export const SPHERE_RADIUS = 250;
+export const SPHERE_RADIUS = 200;
 export const HEARING_RADIUS = 52;
 
 const DEG = Math.PI / 180;
