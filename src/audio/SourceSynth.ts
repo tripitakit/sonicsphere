@@ -1,22 +1,41 @@
 import * as Tone from 'tone';
-import type { SoundArchetype, SourceVariation } from '../types.ts';
+import type { NoiseColor, SoundArchetype, SourceVariation } from '../types.ts';
 import { PERFORMANCE_BUDGET } from '../engine/PerformanceBudget.ts';
 
 /**
  * Tone.js signal chain for a single sound source.
  *
- * Drone stack (pitch-stable, no frequency modulation):
- * mainOsc + subOsc + airOsc → filter → envelope → ampModGain → distanceGain → Panner3D → masterGain
- * ampLfo (slow)              → ampModGain.gain
- * timbreLfo (very slow)      → filter.frequency
+ * Engine families:
+ * - subtractive: osc + sub + optional air partial
+ * - noise: colored noise bed
+ * - fm: inharmonic/FM tones
+ * - resonator: noise excitation into comb resonance
+ *
+ * Common tail:
+ * source bus -> filter -> envelope -> ampModGain -> distanceGain -> Panner3D -> masterGain
+ * ampLfo                       -> ampModGain.gain
+ * timbreLfo                    -> filter.frequency
  */
+
+type StartableSource = Tone.Oscillator | Tone.FMOscillator | Tone.Noise;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function noiseType(color: NoiseColor | undefined): NoiseColor {
+  return color ?? 'pink';
+}
+
 export class SourceSynth {
-  private mainOsc:      Tone.Oscillator;
-  private subOsc:       Tone.Oscillator;
-  private airOsc:       Tone.Oscillator | null;
+  private mainSource:   StartableSource;
+  private subOsc:       Tone.Oscillator | null = null;
+  private airOsc:       Tone.Oscillator | null = null;
   private mainMix:      Tone.Gain;
-  private subMix:       Tone.Gain;
-  private airMix:       Tone.Gain | null;
+  private subMix:       Tone.Gain | null = null;
+  private airMix:       Tone.Gain | null = null;
+  private preFilterBus: Tone.Gain;
+  private resonatorComb: Tone.FeedbackCombFilter | null = null;
   private filter:       Tone.Filter;
   private envelope:     Tone.AmplitudeEnvelope;
   private ampModGain:   Tone.Gain;
@@ -35,6 +54,7 @@ export class SourceSynth {
     variation: SourceVariation,
     masterGain: Tone.Gain,
   ) {
+    const engine = archetype.engine ?? 'subtractive';
     const isRhythmic = archetype.mode === 'rhythmic';
 
     // Apply per-source variation: detune via frequency multiplier, shifted filter, varied LFO rate
@@ -43,27 +63,51 @@ export class SourceSynth {
     const tunedFilter  = archetype.filter.freq * variation.filterFreqMult;
     const tunedLfoRate = archetype.lfoRate * variation.lfoRateMult;
 
-    this.mainOsc = new Tone.Oscillator(tunedFreq, archetype.waveform);
-    this.subOsc = new Tone.Oscillator(tunedFreq * 0.5, 'sine');
+    this.mainMix = new Tone.Gain(engine === 'noise' ? 0.72 : engine === 'resonator' ? 0.64 : 0.58);
+    this.preFilterBus = new Tone.Gain(1);
 
-    // Rich drone blend: stable body + low sub + bright texture partial
-    this.mainMix = new Tone.Gain(0.58);
-    this.subMix  = new Tone.Gain(0.26);
-    if (PERFORMANCE_BUDGET.synth.enableAirOsc) {
-      this.airOsc = new Tone.Oscillator(
-        tunedFreq * 1.5,
-        archetype.waveform === 'sine' ? 'triangle' : 'sawtooth',
-      );
-      this.airMix = new Tone.Gain(0.19);
+    if (engine === 'noise') {
+      this.mainSource = new Tone.Noise(noiseType(archetype.noiseColor));
+    } else if (engine === 'fm') {
+      this.mainSource = new Tone.FMOscillator({
+        frequency: tunedFreq,
+        type: archetype.waveform,
+        modulationType: archetype.fmModulationType ?? 'sine',
+        harmonicity: clamp(archetype.fmHarmonicity ?? 1.8, 0.2, 12),
+        modulationIndex: clamp(archetype.fmModulationIndex ?? 3.2, 0.2, 40),
+      });
+    } else if (engine === 'resonator') {
+      this.mainSource = new Tone.Noise(noiseType(archetype.noiseColor ?? 'white'));
+      const resonatorHz = Math.max(40, archetype.resonatorHz ?? tunedFreq);
+      const delayTime = clamp(1 / resonatorHz, 0.003, 0.05);
+      const resonance = clamp(archetype.resonatorFeedback ?? 0.76, 0.05, 0.96);
+      this.resonatorComb = new Tone.FeedbackCombFilter({
+        delayTime,
+        resonance,
+      });
     } else {
-      this.airOsc = null;
-      this.airMix = null;
+      this.mainSource = new Tone.Oscillator(tunedFreq, archetype.waveform);
+      this.subOsc = new Tone.Oscillator(tunedFreq * 0.5, 'sine');
+      this.subMix = new Tone.Gain(0.26);
+      if (PERFORMANCE_BUDGET.synth.enableAirOsc) {
+        this.airOsc = new Tone.Oscillator(
+          tunedFreq * 1.5,
+          archetype.waveform === 'sine' ? 'triangle' : 'sawtooth',
+        );
+        this.airMix = new Tone.Gain(0.19);
+      }
     }
 
+    const filterQ = engine === 'resonator'
+      ? Math.max(archetype.filter.Q, 4.2)
+      : archetype.filter.Q;
+    const filterFreq = engine === 'resonator'
+      ? Math.max(tunedFilter, archetype.resonatorHz ?? tunedFreq)
+      : tunedFilter;
     this.filter = new Tone.Filter({
       type:      archetype.filter.type,
-      frequency: tunedFilter,
-      Q:         archetype.filter.Q,
+      frequency: filterFreq,
+      Q:         filterQ,
     });
 
     // Rhythmic mode keeps transient envelopes; drone mode keeps long sustain.
@@ -99,9 +143,14 @@ export class SourceSynth {
     });
 
     const depthNorm = Math.min(1, archetype.lfoDepth / 140);
-    const ampDepth = isRhythmic
+    const baseAmpDepth = isRhythmic
       ? 0.58 + depthNorm * 0.38
       : 0.12 + depthNorm * 0.45;
+    const ampDepth = engine === 'noise'
+      ? Math.min(0.95, baseAmpDepth + 0.08)
+      : engine === 'fm'
+        ? Math.min(0.92, baseAmpDepth + 0.04)
+        : baseAmpDepth;
     this.lfo = new Tone.LFO({
       frequency: isRhythmic
         ? Math.min(18, Math.max(0.25, tunedLfoRate))
@@ -109,25 +158,38 @@ export class SourceSynth {
       min: 1 - ampDepth,
       max: 1,
     });
+
+    const timbreMinScale = engine === 'noise' ? 0.42 : 0.58;
+    const timbreMaxScale = engine === 'noise' ? 1.9 : 1.42;
     this.timbreLfo = PERFORMANCE_BUDGET.synth.enableTimbreLfo
       ? new Tone.LFO({
           frequency: isRhythmic
             ? Math.min(2.4, Math.max(0.06, tunedLfoRate * 0.22))
             : Math.max(0.01, tunedLfoRate * 0.054),
-          min: Math.max(40, tunedFilter * 0.58),
-          max: Math.max(80, tunedFilter * 1.42),
+          min: Math.max(40, filterFreq * timbreMinScale),
+          max: Math.max(80, filterFreq * timbreMaxScale),
         })
       : null;
 
     // Wire signal chain
-    this.mainOsc.connect(this.mainMix);
-    this.subOsc.connect(this.subMix);
-    this.mainMix.connect(this.filter);
-    this.subMix.connect(this.filter);
+    this.mainSource.connect(this.mainMix);
+    this.mainMix.connect(this.preFilterBus);
+    if (this.subOsc && this.subMix) {
+      this.subOsc.connect(this.subMix);
+      this.subMix.connect(this.preFilterBus);
+    }
     if (this.airOsc && this.airMix) {
       this.airOsc.connect(this.airMix);
-      this.airMix.connect(this.filter);
+      this.airMix.connect(this.preFilterBus);
     }
+
+    if (this.resonatorComb) {
+      this.preFilterBus.connect(this.resonatorComb);
+      this.resonatorComb.connect(this.filter);
+    } else {
+      this.preFilterBus.connect(this.filter);
+    }
+
     this.filter.connect(this.envelope);
     this.envelope.connect(this.ampModGain);
     this.ampModGain.connect(this.distanceGain);
@@ -146,8 +208,8 @@ export class SourceSynth {
       clearTimeout(this.disposeTimer);
       this.disposeTimer = null;
     }
-    this.mainOsc.start();
-    this.subOsc.start();
+    this.mainSource.start();
+    this.subOsc?.start();
     this.airOsc?.start();
     this.lfo.start();
     this.timbreLfo?.start();
@@ -213,18 +275,20 @@ export class SourceSynth {
 
   private disposeNodes(): void {
     try {
-      this.mainOsc.stop();
-      this.subOsc.stop();
+      this.mainSource.stop();
+      this.subOsc?.stop();
       this.airOsc?.stop();
       this.lfo.stop();
       this.timbreLfo?.stop();
 
-      this.mainOsc.dispose();
-      this.subOsc.dispose();
+      this.mainSource.dispose();
+      this.subOsc?.dispose();
       this.airOsc?.dispose();
       this.mainMix.dispose();
-      this.subMix.dispose();
+      this.subMix?.dispose();
       this.airMix?.dispose();
+      this.preFilterBus.dispose();
+      this.resonatorComb?.dispose();
       this.filter.dispose();
       this.envelope.dispose();
       this.ampModGain.dispose();

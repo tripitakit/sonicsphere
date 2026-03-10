@@ -12,11 +12,14 @@ export interface CartesianCoord {
 export type OscillatorWaveform = 'sine' | 'square' | 'triangle' | 'sawtooth';
 export type FilterType = 'lowpass' | 'highpass' | 'bandpass';
 export type LfoTarget = 'frequency' | 'amplitude';
+export type SoundEngineType = 'subtractive' | 'noise' | 'fm' | 'resonator';
+export type NoiseColor = 'white' | 'pink' | 'brown';
 
 export interface SoundArchetype {
   name: string;
   frequency: number;
   waveform: OscillatorWaveform;
+  engine?: SoundEngineType;
   mode?: 'drone' | 'rhythmic'; // Optional behavior profile. Default is drone.
   attack: number;
   decay: number;
@@ -26,6 +29,12 @@ export interface SoundArchetype {
   lfoDepth: number;
   lfoTarget: LfoTarget; // Legacy metadata; runtime modulation is amplitude/timbre only (no pitch LFO)
   filter: { type: FilterType; freq: number; Q: number };
+  noiseColor?: NoiseColor;
+  fmHarmonicity?: number;
+  fmModulationIndex?: number;
+  fmModulationType?: OscillatorWaveform;
+  resonatorHz?: number;
+  resonatorFeedback?: number;
 }
 
 export interface SoundSourceOscillation {
