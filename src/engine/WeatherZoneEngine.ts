@@ -16,93 +16,378 @@ const MAX_STRONG_ZONES = 2;
 const MIN_ZONE_INFLUENCE = 0.012;
 const EPS = 1e-6;
 
+export type WeatherFxProfileName = 'subtle' | 'experimental' | 'extreme';
+
+type WeatherTypeFxBias = {
+  wetLevel: number;
+  delayTimeSec: number;
+  delayFeedback: number;
+  delayWet: number;
+  reverbRoomSize: number;
+  highpassHz: number;
+  lowpassHz: number;
+  bandpassMix: number;
+  bandpassQ: number;
+  bandpassSweepHz: number;
+  bandpassSweepMinHz: number;
+  bandpassSweepMaxHz: number;
+};
+
+type WeatherOverlapBoost = {
+  wetLevel: number;
+  delayFeedback: number;
+  delayWet: number;
+  reverbRoomSize: number;
+  bandpassMix: number;
+  bandpassQ: number;
+  bandpassSweepHz: number;
+};
+
+type WeatherFxMultiplier = {
+  wetLevel: number;
+  delayFeedback: number;
+  delayWet: number;
+  reverbRoomSize: number;
+  bandpassMix: number;
+  bandpassQ: number;
+  bandpassSweepHz: number;
+};
+
+type WeatherFxSmoothingStep = {
+  default: number;
+  delayTimeSec: number;
+  delayFeedback: number;
+  delayWet: number;
+  bandpassSweepHz: number;
+  bandpassSweepRange: number;
+};
+
+type WeatherEffectTuning = {
+  profileName: string;
+  globalBlendAmount: number;
+  roleWeightStrong: number;
+  roleWeightBackground: number;
+  zoneTypeWeight: Record<WeatherZoneType, number>;
+  zoneTypeFxBias: Record<WeatherZoneType, WeatherTypeFxBias>;
+  overlapBoost: WeatherOverlapBoost;
+  fxMultiplier: WeatherFxMultiplier;
+  delayQuantization: {
+    enabled: boolean;
+    stepSec: number;
+    blend: number;
+    minHoldSec: number;
+    switchThresholdSec: number;
+  };
+  fxSmoothing: {
+    active: WeatherFxSmoothingStep;
+    idle: WeatherFxSmoothingStep;
+  };
+};
+
 /**
  * Fast tuning surface for weather-FX behavior.
  * Keep edits here for rapid listening tests.
  */
-export const WEATHER_EFFECT_TUNING = {
-  profileName: 'experimental-v2-zonal-space',
-  // >1 pushes blend faster toward zone character; 1 = neutral.
-  globalBlendAmount: 1.22,
-  // Relative contribution of zone roles.
-  roleWeightStrong: 1.0,
-  roleWeightBackground: 0.62,
-  // Relative impact per weather family.
-  zoneTypeWeight: {
-    mist: 1.06,
-    echo: 1.14,
-    ion: 1.28,
-  } satisfies Record<WeatherZoneType, number>,
-  // Emphasize spatial FX differences between weather families.
-  // Keep this block as the primary knob-set for "more/less obvious" contrasts.
-  zoneTypeFxBias: {
-    mist: {
-      wetLevel: 1.12,
-      delayTimeSec: 0.9,
-      delayFeedback: 0.94,
-      delayWet: 0.9,
-      reverbRoomSize: 1.28,
+const WEATHER_EFFECT_PRESETS: Record<WeatherFxProfileName, WeatherEffectTuning> = {
+  subtle: {
+    profileName: 'subtle-contemplative',
+    globalBlendAmount: 1.08,
+    roleWeightStrong: 1.0,
+    roleWeightBackground: 0.54,
+    zoneTypeWeight: {
+      mist: 1.0,
+      echo: 1.04,
+      ion: 1.1,
     },
-    echo: {
-      wetLevel: 1.22,
-      delayTimeSec: 1.16,
-      delayFeedback: 1.36,
-      delayWet: 1.34,
-      reverbRoomSize: 1.18,
+    zoneTypeFxBias: {
+      mist: {
+        wetLevel: 1.08,
+        delayTimeSec: 0.94,
+        delayFeedback: 0.9,
+        delayWet: 0.86,
+        reverbRoomSize: 1.18,
+        highpassHz: 0.9,
+        lowpassHz: 0.9,
+        bandpassMix: 0.88,
+        bandpassQ: 0.9,
+        bandpassSweepHz: 0.84,
+        bandpassSweepMinHz: 0.92,
+        bandpassSweepMaxHz: 0.92,
+      },
+      echo: {
+        wetLevel: 1.1,
+        delayTimeSec: 1.08,
+        delayFeedback: 1.2,
+        delayWet: 1.16,
+        reverbRoomSize: 1.12,
+        highpassHz: 0.96,
+        lowpassHz: 0.84,
+        bandpassMix: 0.96,
+        bandpassQ: 1.02,
+        bandpassSweepHz: 0.9,
+        bandpassSweepMinHz: 0.95,
+        bandpassSweepMaxHz: 0.98,
+      },
+      ion: {
+        wetLevel: 0.92,
+        delayTimeSec: 0.88,
+        delayFeedback: 0.88,
+        delayWet: 0.82,
+        reverbRoomSize: 0.9,
+        highpassHz: 1.12,
+        lowpassHz: 1.08,
+        bandpassMix: 1.18,
+        bandpassQ: 1.2,
+        bandpassSweepHz: 1.08,
+        bandpassSweepMinHz: 0.92,
+        bandpassSweepMaxHz: 1.08,
+      },
     },
-    ion: {
-      wetLevel: 0.9,
-      delayTimeSec: 0.88,
-      delayFeedback: 0.8,
-      delayWet: 0.76,
-      reverbRoomSize: 0.82,
+    overlapBoost: {
+      wetLevel: 0.018,
+      delayFeedback: 0.02,
+      delayWet: 0.018,
+      reverbRoomSize: 0.02,
+      bandpassMix: 0.04,
+      bandpassQ: 0.25,
+      bandpassSweepHz: 0.15,
     },
-  } satisfies Record<WeatherZoneType, {
-    wetLevel: number;
-    delayTimeSec: number;
-    delayFeedback: number;
-    delayWet: number;
-    reverbRoomSize: number;
-  }>,
-  // Per-parameter multipliers after weighted blend.
-  fxMultiplier: {
-    wetLevel: 1.28,
-    delayFeedback: 1.24,
-    delayWet: 1.18,
-    reverbRoomSize: 1.12,
-    bandpassMix: 1.38,
-    bandpassQ: 1.16,
-    bandpassSweepHz: 1.12,
+    fxMultiplier: {
+      wetLevel: 1.08,
+      delayFeedback: 1.06,
+      delayWet: 1.02,
+      reverbRoomSize: 1.04,
+      bandpassMix: 1.12,
+      bandpassQ: 1.08,
+      bandpassSweepHz: 1.04,
+    },
+    delayQuantization: {
+      enabled: true,
+      stepSec: 0.035,
+      blend: 0.86,
+      minHoldSec: 0.96,
+      switchThresholdSec: 0.025,
+    },
+    fxSmoothing: {
+      active: {
+        default: 0.13,
+        delayTimeSec: 0.055,
+        delayFeedback: 0.09,
+        delayWet: 0.09,
+        bandpassSweepHz: 0.07,
+        bandpassSweepRange: 0.045,
+      },
+      idle: {
+        default: 0.075,
+        delayTimeSec: 0.03,
+        delayFeedback: 0.05,
+        delayWet: 0.05,
+        bandpassSweepHz: 0.04,
+        bandpassSweepRange: 0.026,
+      },
+    },
   },
-  // Keep delay-time more stable across moving weather boundaries.
-  delayQuantization: {
-    enabled: true,
-    stepSec: 0.04,
-    blend: 0.9,
-    minHoldSec: 1.15,
-    switchThresholdSec: 0.03,
+  experimental: {
+    profileName: 'experimental-v3-deep-anomaly',
+    globalBlendAmount: 1.34,
+    roleWeightStrong: 1.0,
+    roleWeightBackground: 0.66,
+    zoneTypeWeight: {
+      mist: 1.08,
+      echo: 1.2,
+      ion: 1.34,
+    },
+    zoneTypeFxBias: {
+      mist: {
+        wetLevel: 1.2,
+        delayTimeSec: 0.86,
+        delayFeedback: 0.9,
+        delayWet: 0.88,
+        reverbRoomSize: 1.4,
+        highpassHz: 0.78,
+        lowpassHz: 0.74,
+        bandpassMix: 1.08,
+        bandpassQ: 1.06,
+        bandpassSweepHz: 0.92,
+        bandpassSweepMinHz: 0.86,
+        bandpassSweepMaxHz: 0.9,
+      },
+      echo: {
+        wetLevel: 1.34,
+        delayTimeSec: 1.24,
+        delayFeedback: 1.46,
+        delayWet: 1.42,
+        reverbRoomSize: 1.28,
+        highpassHz: 0.92,
+        lowpassHz: 0.66,
+        bandpassMix: 1.2,
+        bandpassQ: 1.24,
+        bandpassSweepHz: 1.08,
+        bandpassSweepMinHz: 0.95,
+        bandpassSweepMaxHz: 1.05,
+      },
+      ion: {
+        wetLevel: 1.02,
+        delayTimeSec: 0.82,
+        delayFeedback: 0.92,
+        delayWet: 0.9,
+        reverbRoomSize: 0.9,
+        highpassHz: 1.32,
+        lowpassHz: 1.18,
+        bandpassMix: 1.66,
+        bandpassQ: 1.7,
+        bandpassSweepHz: 1.48,
+        bandpassSweepMinHz: 0.9,
+        bandpassSweepMaxHz: 1.26,
+      },
+    },
+    overlapBoost: {
+      wetLevel: 0.045,
+      delayFeedback: 0.07,
+      delayWet: 0.05,
+      reverbRoomSize: 0.06,
+      bandpassMix: 0.12,
+      bandpassQ: 1.25,
+      bandpassSweepHz: 0.9,
+    },
+    fxMultiplier: {
+      wetLevel: 1.36,
+      delayFeedback: 1.3,
+      delayWet: 1.24,
+      reverbRoomSize: 1.2,
+      bandpassMix: 1.58,
+      bandpassQ: 1.34,
+      bandpassSweepHz: 1.28,
+    },
+    delayQuantization: {
+      enabled: true,
+      stepSec: 0.06,
+      blend: 0.92,
+      minHoldSec: 1.28,
+      switchThresholdSec: 0.04,
+    },
+    fxSmoothing: {
+      active: {
+        default: 0.115,
+        delayTimeSec: 0.05,
+        delayFeedback: 0.08,
+        delayWet: 0.08,
+        bandpassSweepHz: 0.065,
+        bandpassSweepRange: 0.04,
+      },
+      idle: {
+        default: 0.07,
+        delayTimeSec: 0.035,
+        delayFeedback: 0.05,
+        delayWet: 0.05,
+        bandpassSweepHz: 0.042,
+        bandpassSweepRange: 0.026,
+      },
+    },
   },
-  // Temporal smoothing to avoid zipper noise and abrupt spectral jumps.
-  // Keep delay/sweep-range slower than the rest to reduce clicks.
-  fxSmoothing: {
-    active: {
-      default: 0.14,
-      delayTimeSec: 0.06,
+  extreme: {
+    profileName: 'extreme-fractured-weather',
+    globalBlendAmount: 1.46,
+    roleWeightStrong: 1.0,
+    roleWeightBackground: 0.7,
+    zoneTypeWeight: {
+      mist: 1.12,
+      echo: 1.28,
+      ion: 1.42,
+    },
+    zoneTypeFxBias: {
+      mist: {
+        wetLevel: 1.26,
+        delayTimeSec: 0.84,
+        delayFeedback: 0.94,
+        delayWet: 0.9,
+        reverbRoomSize: 1.52,
+        highpassHz: 0.74,
+        lowpassHz: 0.68,
+        bandpassMix: 1.16,
+        bandpassQ: 1.12,
+        bandpassSweepHz: 0.98,
+        bandpassSweepMinHz: 0.82,
+        bandpassSweepMaxHz: 0.86,
+      },
+      echo: {
+        wetLevel: 1.46,
+        delayTimeSec: 1.32,
+        delayFeedback: 1.58,
+        delayWet: 1.52,
+        reverbRoomSize: 1.38,
+        highpassHz: 0.9,
+        lowpassHz: 0.62,
+        bandpassMix: 1.34,
+        bandpassQ: 1.34,
+        bandpassSweepHz: 1.16,
+        bandpassSweepMinHz: 0.92,
+        bandpassSweepMaxHz: 1.1,
+      },
+      ion: {
+        wetLevel: 1.08,
+        delayTimeSec: 0.78,
+        delayFeedback: 0.98,
+        delayWet: 0.96,
+        reverbRoomSize: 0.94,
+        highpassHz: 1.42,
+        lowpassHz: 1.24,
+        bandpassMix: 1.86,
+        bandpassQ: 1.92,
+        bandpassSweepHz: 1.68,
+        bandpassSweepMinHz: 0.84,
+        bandpassSweepMaxHz: 1.36,
+      },
+    },
+    overlapBoost: {
+      wetLevel: 0.065,
       delayFeedback: 0.1,
-      delayWet: 0.1,
-      bandpassSweepHz: 0.08,
-      bandpassSweepRange: 0.05,
+      delayWet: 0.075,
+      reverbRoomSize: 0.08,
+      bandpassMix: 0.18,
+      bandpassQ: 1.9,
+      bandpassSweepHz: 1.4,
     },
-    idle: {
-      default: 0.08,
-      delayTimeSec: 0.035,
-      delayFeedback: 0.06,
-      delayWet: 0.06,
-      bandpassSweepHz: 0.05,
-      bandpassSweepRange: 0.03,
+    fxMultiplier: {
+      wetLevel: 1.48,
+      delayFeedback: 1.42,
+      delayWet: 1.34,
+      reverbRoomSize: 1.28,
+      bandpassMix: 1.84,
+      bandpassQ: 1.54,
+      bandpassSweepHz: 1.44,
+    },
+    delayQuantization: {
+      enabled: true,
+      stepSec: 0.07,
+      blend: 0.94,
+      minHoldSec: 1.42,
+      switchThresholdSec: 0.045,
+    },
+    fxSmoothing: {
+      active: {
+        default: 0.1,
+        delayTimeSec: 0.045,
+        delayFeedback: 0.07,
+        delayWet: 0.07,
+        bandpassSweepHz: 0.055,
+        bandpassSweepRange: 0.034,
+      },
+      idle: {
+        default: 0.06,
+        delayTimeSec: 0.03,
+        delayFeedback: 0.042,
+        delayWet: 0.042,
+        bandpassSweepHz: 0.035,
+        bandpassSweepRange: 0.022,
+      },
     },
   },
-} as const;
+};
+
+// Quick selector for listening tests.
+export const ACTIVE_WEATHER_FX_PROFILE: WeatherFxProfileName = 'experimental';
+export const WEATHER_EFFECT_TUNING: WeatherEffectTuning = WEATHER_EFFECT_PRESETS[ACTIVE_WEATHER_FX_PROFILE];
 
 interface WeatherPresetVariant {
   name: string;
@@ -369,22 +654,22 @@ function degreesToChord(distanceDeg: number): number {
 }
 
 function clampBlend(blend: WeatherFxBlend): WeatherFxBlend {
-  const minHz = clamp(blend.bandpassSweepMinHz, 220, 5600);
-  const maxHz = clamp(blend.bandpassSweepMaxHz, 600, 8400);
-  const safeMin = Math.min(minHz, maxHz - 120);
-  const safeMax = Math.max(safeMin + 120, maxHz);
+  const minHz = clamp(blend.bandpassSweepMinHz, 180, 6400);
+  const maxHz = clamp(blend.bandpassSweepMaxHz, 520, 9200);
+  const safeMin = Math.min(minHz, maxHz - 150);
+  const safeMax = Math.max(safeMin + 150, maxHz);
 
   return {
-    wetLevel: clamp(blend.wetLevel, 0.06, 0.3),
+    wetLevel: clamp(blend.wetLevel, 0.06, 0.38),
     delayTimeSec: clamp(blend.delayTimeSec, 0.1, 0.82),
-    delayFeedback: clamp(blend.delayFeedback, 0.08, 0.56),
-    delayWet: clamp(blend.delayWet, 0.05, 0.5),
-    reverbRoomSize: clamp(blend.reverbRoomSize, 0.2, 0.82),
-    highpassHz: clamp(blend.highpassHz, 35, 320),
-    lowpassHz: clamp(blend.lowpassHz, 2600, 11000),
-    bandpassMix: clamp(blend.bandpassMix, 0, 0.72),
-    bandpassQ: clamp(blend.bandpassQ, 0.8, 8.5),
-    bandpassSweepHz: clamp(blend.bandpassSweepHz, 0.12, 12),
+    delayFeedback: clamp(blend.delayFeedback, 0.08, 0.62),
+    delayWet: clamp(blend.delayWet, 0.05, 0.58),
+    reverbRoomSize: clamp(blend.reverbRoomSize, 0.2, 0.9),
+    highpassHz: clamp(blend.highpassHz, 35, 520),
+    lowpassHz: clamp(blend.lowpassHz, 1800, 11000),
+    bandpassMix: clamp(blend.bandpassMix, 0, 0.84),
+    bandpassQ: clamp(blend.bandpassQ, 0.8, 11),
+    bandpassSweepHz: clamp(blend.bandpassSweepHz, 0.12, 15),
     bandpassSweepMinHz: safeMin,
     bandpassSweepMaxHz: safeMax,
   };
@@ -395,7 +680,7 @@ function presetForZone(zone: WeatherZoneModel): WeatherPresetVariant {
   return variants[zone.presetIndex] ?? variants[0]!;
 }
 
-function applyExperimentalTuning(blend: WeatherFxBlend): WeatherFxBlend {
+function applyProfileTuning(blend: WeatherFxBlend): WeatherFxBlend {
   const m = WEATHER_EFFECT_TUNING.fxMultiplier;
   return {
     ...blend,
@@ -569,13 +854,13 @@ export class WeatherZoneEngine {
       delayFeedback += preset.delayFeedback * typeFx.delayFeedback * weight;
       delayWet += preset.delayWet * typeFx.delayWet * weight;
       reverbRoomSize += preset.reverbRoomSize * typeFx.reverbRoomSize * weight;
-      highpassHz += preset.highpassHz * weight;
-      lowpassHz += preset.lowpassHz * weight;
-      bandpassMix += preset.bandpassMix * weight;
-      bandpassQ += preset.bandpassQ * weight;
-      bandpassSweepHz += preset.bandpassSweepHz * weight;
-      bandpassSweepMinHz += preset.bandpassMinHz * weight;
-      bandpassSweepMaxHz += preset.bandpassMaxHz * weight;
+      highpassHz += preset.highpassHz * typeFx.highpassHz * weight;
+      lowpassHz += preset.lowpassHz * typeFx.lowpassHz * weight;
+      bandpassMix += preset.bandpassMix * typeFx.bandpassMix * weight;
+      bandpassQ += preset.bandpassQ * typeFx.bandpassQ * weight;
+      bandpassSweepHz += preset.bandpassSweepHz * typeFx.bandpassSweepHz * weight;
+      bandpassSweepMinHz += preset.bandpassMinHz * typeFx.bandpassSweepMinHz * weight;
+      bandpassSweepMaxHz += preset.bandpassMaxHz * typeFx.bandpassSweepMaxHz * weight;
     }
 
     if (totalWeight <= EPS) return DEFAULT_WEATHER_FX_BLEND;
@@ -584,18 +869,48 @@ export class WeatherZoneEngine {
     const activity = clamp01((totalWeight / 1.15) * WEATHER_EFFECT_TUNING.globalBlendAmount);
     const rawDelayTimeSec = delayTimeSec * invWeight;
     const stabilizedDelayTimeSec = this.stabilizeDelayTime(rawDelayTimeSec, activity, elapsedSeconds);
+    const overlapFactor = clamp01(((selected.length - 1) / Math.max(1, MAX_ACTIVE_ZONES - 1)) * activity);
+    const overlap = WEATHER_EFFECT_TUNING.overlapBoost;
 
     const blend: WeatherFxBlend = {
-      wetLevel: lerp(DEFAULT_WEATHER_FX_BLEND.wetLevel, wetLevel * invWeight, activity),
+      wetLevel: lerp(
+        DEFAULT_WEATHER_FX_BLEND.wetLevel,
+        wetLevel * invWeight + overlap.wetLevel * overlapFactor,
+        activity,
+      ),
       delayTimeSec: lerp(DEFAULT_WEATHER_FX_BLEND.delayTimeSec, stabilizedDelayTimeSec, activity),
-      delayFeedback: lerp(DEFAULT_WEATHER_FX_BLEND.delayFeedback, delayFeedback * invWeight, activity),
-      delayWet: lerp(DEFAULT_WEATHER_FX_BLEND.delayWet, delayWet * invWeight, activity),
-      reverbRoomSize: lerp(DEFAULT_WEATHER_FX_BLEND.reverbRoomSize, reverbRoomSize * invWeight, activity),
+      delayFeedback: lerp(
+        DEFAULT_WEATHER_FX_BLEND.delayFeedback,
+        delayFeedback * invWeight + overlap.delayFeedback * overlapFactor,
+        activity,
+      ),
+      delayWet: lerp(
+        DEFAULT_WEATHER_FX_BLEND.delayWet,
+        delayWet * invWeight + overlap.delayWet * overlapFactor,
+        activity,
+      ),
+      reverbRoomSize: lerp(
+        DEFAULT_WEATHER_FX_BLEND.reverbRoomSize,
+        reverbRoomSize * invWeight + overlap.reverbRoomSize * overlapFactor,
+        activity,
+      ),
       highpassHz: lerp(DEFAULT_WEATHER_FX_BLEND.highpassHz, highpassHz * invWeight, activity),
       lowpassHz: lerp(DEFAULT_WEATHER_FX_BLEND.lowpassHz, lowpassHz * invWeight, activity),
-      bandpassMix: lerp(DEFAULT_WEATHER_FX_BLEND.bandpassMix, bandpassMix * invWeight, activity),
-      bandpassQ: lerp(DEFAULT_WEATHER_FX_BLEND.bandpassQ, bandpassQ * invWeight, activity),
-      bandpassSweepHz: lerp(DEFAULT_WEATHER_FX_BLEND.bandpassSweepHz, bandpassSweepHz * invWeight, activity),
+      bandpassMix: lerp(
+        DEFAULT_WEATHER_FX_BLEND.bandpassMix,
+        bandpassMix * invWeight + overlap.bandpassMix * overlapFactor,
+        activity,
+      ),
+      bandpassQ: lerp(
+        DEFAULT_WEATHER_FX_BLEND.bandpassQ,
+        bandpassQ * invWeight + overlap.bandpassQ * overlapFactor,
+        activity,
+      ),
+      bandpassSweepHz: lerp(
+        DEFAULT_WEATHER_FX_BLEND.bandpassSweepHz,
+        bandpassSweepHz * invWeight + overlap.bandpassSweepHz * overlapFactor,
+        activity,
+      ),
       bandpassSweepMinHz: lerp(
         DEFAULT_WEATHER_FX_BLEND.bandpassSweepMinHz,
         bandpassSweepMinHz * invWeight,
@@ -608,7 +923,7 @@ export class WeatherZoneEngine {
       ),
     };
 
-    return clampBlend(applyExperimentalTuning(blend));
+    return clampBlend(applyProfileTuning(blend));
   }
 
   private stabilizeDelayTime(rawDelayTimeSec: number, activity: number, elapsedSeconds: number): number {

@@ -1,7 +1,11 @@
 import * as Tone from 'tone';
 import type { WeatherFxBlend } from '../types.ts';
 import { PERFORMANCE_BUDGET } from './PerformanceBudget.ts';
-import { DEFAULT_WEATHER_FX_BLEND } from './WeatherZoneEngine.ts';
+import {
+  ACTIVE_WEATHER_FX_PROFILE,
+  DEFAULT_WEATHER_FX_BLEND,
+  type WeatherFxProfileName,
+} from './WeatherZoneEngine.ts';
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -11,38 +15,123 @@ function finiteOr(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
+type WeatherAudioLimits = {
+  wetLevel: { min: number; max: number };
+  delayTimeSec: { min: number; max: number };
+  delayFeedback: { min: number; max: number };
+  delayWet: { min: number; max: number };
+  reverbRoomSize: { min: number; max: number };
+  bandpassMix: { min: number; max: number };
+  bandpassQ: { min: number; max: number };
+  bandpassSweepHz: { min: number; max: number };
+  bandpassSweepMinHz: { min: number; max: number };
+  bandpassSweepMaxHz: { max: number; minGap: number };
+  highpassHz: { min: number; max: number };
+  lowpassHz: { min: number; max: number };
+};
+
+type WeatherAudioResponse = {
+  dryAttenuationByWet: number;
+  mainRampSec: number;
+  delayRampSec: number;
+  reverbRampSec: number;
+  lfoRampSec: number;
+};
+
+type WeatherAudioProfile = {
+  limits: WeatherAudioLimits;
+  response: WeatherAudioResponse;
+  guardScale: number;
+};
+
 /**
- * Fast tuning surface for runtime weather-FX response.
- * Keep edits here for listening tests.
+ * Runtime profile map for weather FX. Keep aligned with WeatherZoneEngine presets.
  */
-const WEATHER_AUDIO_LIMITS = {
-  wetLevel: { min: 0.06, max: 0.3 },
-  delayTimeSec: { min: 0.1, max: 0.82 },
-  delayFeedback: { min: 0.08, max: 0.56 },
-  delayWet: { min: 0.05, max: 0.5 },
-  reverbRoomSize: { min: 0.2, max: 0.82 },
-  bandpassMix: { min: 0, max: 0.72 },
-  bandpassQ: { min: 0.8, max: 8.5 },
-  bandpassSweepHz: { min: 0.12, max: 12 },
-  bandpassSweepMinHz: { min: 220, max: 6400 },
-  bandpassSweepMaxHz: { max: 8400, minGap: 120 },
-  highpassHz: { min: 35, max: 320 },
-  lowpassHz: { min: 2600, max: 11000 },
-} as const;
+const WEATHER_AUDIO_PROFILES: Record<WeatherFxProfileName, WeatherAudioProfile> = {
+  subtle: {
+    limits: {
+      wetLevel: { min: 0.06, max: 0.3 },
+      delayTimeSec: { min: 0.1, max: 0.82 },
+      delayFeedback: { min: 0.08, max: 0.54 },
+      delayWet: { min: 0.05, max: 0.46 },
+      reverbRoomSize: { min: 0.2, max: 0.78 },
+      bandpassMix: { min: 0, max: 0.66 },
+      bandpassQ: { min: 0.8, max: 8.2 },
+      bandpassSweepHz: { min: 0.12, max: 10 },
+      bandpassSweepMinHz: { min: 220, max: 5600 },
+      bandpassSweepMaxHz: { max: 7800, minGap: 120 },
+      highpassHz: { min: 35, max: 360 },
+      lowpassHz: { min: 2200, max: 11000 },
+    },
+    response: {
+      dryAttenuationByWet: 0.78,
+      mainRampSec: 0.28,
+      delayRampSec: 0.56,
+      reverbRampSec: 0.44,
+      lfoRampSec: 0.27,
+    },
+    guardScale: 1.05,
+  },
+  experimental: {
+    limits: {
+      wetLevel: { min: 0.06, max: 0.38 },
+      delayTimeSec: { min: 0.1, max: 0.82 },
+      delayFeedback: { min: 0.08, max: 0.62 },
+      delayWet: { min: 0.05, max: 0.58 },
+      reverbRoomSize: { min: 0.2, max: 0.9 },
+      bandpassMix: { min: 0, max: 0.84 },
+      bandpassQ: { min: 0.8, max: 11 },
+      bandpassSweepHz: { min: 0.12, max: 15 },
+      bandpassSweepMinHz: { min: 180, max: 6400 },
+      bandpassSweepMaxHz: { max: 9200, minGap: 150 },
+      highpassHz: { min: 35, max: 520 },
+      lowpassHz: { min: 1800, max: 11000 },
+    },
+    response: {
+      dryAttenuationByWet: 0.82,
+      mainRampSec: 0.3,
+      delayRampSec: 0.62,
+      reverbRampSec: 0.48,
+      lfoRampSec: 0.3,
+    },
+    guardScale: 1.0,
+  },
+  extreme: {
+    limits: {
+      wetLevel: { min: 0.06, max: 0.42 },
+      delayTimeSec: { min: 0.1, max: 0.82 },
+      delayFeedback: { min: 0.08, max: 0.66 },
+      delayWet: { min: 0.05, max: 0.62 },
+      reverbRoomSize: { min: 0.2, max: 0.94 },
+      bandpassMix: { min: 0, max: 0.9 },
+      bandpassQ: { min: 0.8, max: 12 },
+      bandpassSweepHz: { min: 0.12, max: 17 },
+      bandpassSweepMinHz: { min: 160, max: 7000 },
+      bandpassSweepMaxHz: { max: 9600, minGap: 160 },
+      highpassHz: { min: 35, max: 560 },
+      lowpassHz: { min: 1600, max: 11000 },
+    },
+    response: {
+      dryAttenuationByWet: 0.86,
+      mainRampSec: 0.34,
+      delayRampSec: 0.72,
+      reverbRampSec: 0.55,
+      lfoRampSec: 0.34,
+    },
+    guardScale: 1.22,
+  },
+};
 
-const WEATHER_AUDIO_RESPONSE = {
-  dryAttenuationByWet: 0.82,
-  mainRampSec: 0.26,
-  delayRampSec: 0.52,
-  reverbRampSec: 0.4,
-  lfoRampSec: 0.24,
-} as const;
+const WEATHER_AUDIO_PROFILE = WEATHER_AUDIO_PROFILES[ACTIVE_WEATHER_FX_PROFILE];
+const WEATHER_AUDIO_LIMITS = WEATHER_AUDIO_PROFILE.limits;
+const WEATHER_AUDIO_RESPONSE = WEATHER_AUDIO_PROFILE.response;
 
-const AUDIO_GUARD_SCALE = PERFORMANCE_BUDGET.tier === 'low'
+const TIER_GUARD_SCALE = PERFORMANCE_BUDGET.tier === 'low'
   ? 1.8
   : PERFORMANCE_BUDGET.tier === 'balanced'
     ? 1.35
     : 1;
+const AUDIO_GUARD_SCALE = TIER_GUARD_SCALE * WEATHER_AUDIO_PROFILE.guardScale;
 
 function guardScaled(value: number): number {
   return value * AUDIO_GUARD_SCALE;
