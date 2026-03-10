@@ -16,6 +16,9 @@ import {
 const REFERENCE_SPHERE_RADIUS = 100;
 const BASE_WORLD_SCALE = 2.5;
 const SCENE_ZOOM = 1.5;
+// Internal camera zoom to match the preferred browser-zoomed look (250%)
+// while keeping browser zoom at 100%.
+const GAME_VIEW_ZOOM = 2.5;
 const BASELINE_WORLD_SCALE = BASE_WORLD_SCALE * SCENE_ZOOM * (REFERENCE_SPHERE_RADIUS / SPHERE_RADIUS);
 // Audible-zone-centric zoom: target audible diameter on the short screen edge.
 // 0.38 means ~38% of the viewport short side.
@@ -41,11 +44,13 @@ const GRID_COLOR_MAJOR = 0x5d8fb1;
 const GRID_COLOR_EQUATOR = 0x86c5ee;
 const GRID_COLOR_NORTH_POLE = 0xb9e7ff;
 const GRID_COLOR_SOUTH_POLE = 0x8ec2e5;
-const PLAYER_TRAIL_COLOR = 0x78aecf;
+const PLAYER_TRAIL_COLOR = 0xff965e;
+const PLAYER_TRAIL_BLUR_COLOR = 0xff6f3c;
 const PLAYER_TRAIL_MAX_AGE_SEC = 110;
 const PLAYER_TRAIL_MIN_STEP = 1.4; // chord units on sphere radius=100
 const PLAYER_TRAIL_WIDTH_AT_SLOW = 2.2;
 const PLAYER_TRAIL_WIDTH_AT_FAST = 0.65;
+const PLAYER_TRAIL_WIDTH_MULTIPLIER = 3;
 const PLAYER_TRAIL_SPEED_SLOW = 0.9; // world units/s
 const PLAYER_TRAIL_SPEED_FAST = 9.0; // world units/s
 
@@ -109,6 +114,7 @@ export class WorldView {
   private sourceGraphics = new Map<string, PIXI.Graphics>();
   private archetypePaletteCache = new Map<string, ArchetypePalette>();
   private playerDot: PIXI.Graphics;
+  private topCompass: PIXI.Graphics;
   private worldHorizon: PIXI.Graphics;
   private horizons: PIXI.Graphics;
   private grid: PIXI.Graphics;
@@ -129,7 +135,8 @@ export class WorldView {
     //   worldHorizon— always-visible boundary of the visible world disk
     //   container   — source dot glyphs
     //   horizons    — ring stroke overlays
-    //   playerDot   — player mini-compass
+    //   topCompass  — top-right navigation compass
+    //   playerDot   — player center gizmo
 
     this.background = new PIXI.Graphics();
     stage.addChild(this.background);
@@ -151,6 +158,9 @@ export class WorldView {
 
     this.horizons = new PIXI.Graphics();
     stage.addChild(this.horizons);
+
+    this.topCompass = new PIXI.Graphics();
+    stage.addChild(this.topCompass);
 
     this.playerDot = new PIXI.Graphics();
     stage.addChild(this.playerDot);
@@ -180,6 +190,7 @@ export class WorldView {
     this.drawGraticule(playerPos, playerHeading, cx, cy);
     this.drawVisibleWorldHorizon(cx, cy);
     this.drawHorizons(cx, cy, audibleCount, elapsed);
+    this.drawTopRightCompass(screenW, playerHeading, autopilotEnabled);
     this.drawPlayerDot(cx, cy, playerHeading, autopilotEnabled);
 
     // Draw each source
@@ -258,9 +269,10 @@ export class WorldView {
   private updateViewScale(screenW: number, screenH: number): void {
     const shortEdge = Math.max(1, Math.min(screenW, screenH));
     const targetSoundRadiusPx = shortEdge * AUDIBLE_FOCUS_DIAMETER_RATIO * 0.5;
-    const focusScale = targetSoundRadiusPx / HEARING_RADIUS;
+    const focusScale = (targetSoundRadiusPx / HEARING_RADIUS) * GAME_VIEW_ZOOM;
+    const baselineScaled = BASELINE_WORLD_SCALE * GAME_VIEW_ZOOM;
 
-    this.worldScale = Math.max(BASELINE_WORLD_SCALE, focusScale);
+    this.worldScale = Math.max(baselineScaled, focusScale);
     this.soundHorizonPx = HEARING_RADIUS * this.worldScale;
     this.worldHorizonPx = SPHERE_RADIUS * this.worldScale;
   }
@@ -350,14 +362,36 @@ export class WorldView {
       if (prevScreen) {
         const dt = Math.max(0.016, current.t - prevScreen.t);
         const speed = chordDistance(prevScreen.pos, current.pos) / dt;
-        const width = inverseWidthForSpeed(speed);
+        const baseWidth = inverseWidthForSpeed(speed) * PLAYER_TRAIL_WIDTH_MULTIPLIER;
+
+        const midX = (prevScreen.x + current.x) * 0.5;
+        const midY = (prevScreen.y + current.y) * 0.5;
+        const distFromGizmoNorm = clamp01(Math.hypot(midX - cx, midY - cy) / Math.max(1, this.worldHorizonPx));
+        // Fade out trail as segments get farther from player gizmo.
+        const distanceFade = Math.pow(1 - distFromGizmoNorm, 1.35);
+        const alpha = 0.34 * Math.min(prevScreen.alpha, current.alpha) * distanceFade;
+        if (alpha <= 0.001) {
+          prevScreen = current;
+          continue;
+        }
+
+        // Soft, blurred under-stroke + sharp core stroke.
+        const blurWidth = baseWidth * (2.0 + distFromGizmoNorm * 0.55);
+        this.trail
+          .moveTo(prevScreen.x, prevScreen.y)
+          .lineTo(current.x, current.y)
+          .stroke({
+            color: PLAYER_TRAIL_BLUR_COLOR,
+            alpha: alpha * 0.32,
+            width: blurWidth,
+          });
         this.trail
           .moveTo(prevScreen.x, prevScreen.y)
           .lineTo(current.x, current.y)
           .stroke({
             color: PLAYER_TRAIL_COLOR,
-            alpha: 0.18 * Math.min(prevScreen.alpha, current.alpha),
-            width,
+            alpha,
+            width: baseWidth,
           });
       }
 
@@ -581,24 +615,54 @@ export class WorldView {
     }
   }
 
-  private drawPlayerDot(cx: number, cy: number, heading: number, autopilotEnabled: boolean): void {
+  private drawPlayerDot(cx: number, cy: number, _heading: number, autopilotEnabled: boolean): void {
     this.playerDot.clear();
 
+    const ringR = 9;
+    // Local-frame forward is always screen-up in this projection.
+    const forwardLocalA = -Math.PI / 2;
+
+    // Restored center gizmo: compact position marker + heading pointer.
+    this.playerDot.circle(cx, cy, ringR + 4).fill({ color: 0x190d06, alpha: 0.6 });
+    this.playerDot.circle(cx, cy, ringR + 1).stroke({ color: 0xad6433, alpha: 0.76, width: 1.2 });
+    this.playerDot.circle(cx, cy, ringR).fill({ color: 0x2c1609, alpha: 0.9 });
+    this.playerDot.circle(cx, cy, 3.4).fill({ color: 0xffc27d, alpha: 0.92 });
+    this.playerDot.circle(cx, cy, 1.6).fill({ color: 0x5a3519, alpha: 0.92 });
+
+    const hx = cx + Math.cos(forwardLocalA) * (ringR + 8);
+    const hy = cy + Math.sin(forwardLocalA) * (ringR + 8);
+    this.playerDot
+      .moveTo(cx, cy)
+      .lineTo(hx, hy)
+      .stroke({ color: 0xffe8cb, alpha: 0.88, width: 1.3 });
+    this.playerDot.circle(hx, hy, 2.1).fill({ color: 0xfff2e3, alpha: 0.92 });
+
+    if (autopilotEnabled) {
+      this.playerDot
+        .circle(cx, cy, ringR + 7)
+        .stroke({ color: 0xff9648, alpha: 0.52, width: 1.1 });
+    }
+  }
+
+  private drawTopRightCompass(screenW: number, heading: number, autopilotEnabled: boolean): void {
+    this.topCompass.clear();
+
     const DEG = Math.PI / 180;
-    const radius = 12;
+    const margin = 78;
+    const cx = Math.max(64, screenW - margin);
+    const cy = margin;
+    const radius = 40;
 
-    // Mini-compass backplate
-    this.playerDot.circle(cx, cy, radius + 4).fill({ color: 0x060b14, alpha: 0.78 });
-    this.playerDot.circle(cx, cy, radius + 1).stroke({ color: 0x35546b, alpha: 0.72, width: 1.2 });
-    this.playerDot.circle(cx, cy, radius).fill({ color: 0x0f1721, alpha: 0.88 });
-    this.playerDot.circle(cx, cy, radius).stroke({ color: 0x8bb0c8, alpha: 0.44, width: 1 });
+    this.topCompass.circle(cx, cy, radius + 9).fill({ color: 0x050b14, alpha: 0.62 });
+    this.topCompass.circle(cx, cy, radius + 3).stroke({ color: 0x35566d, alpha: 0.72, width: 1.2 });
+    this.topCompass.circle(cx, cy, radius).fill({ color: 0x0d1622, alpha: 0.9 });
+    this.topCompass.circle(cx, cy, radius).stroke({ color: 0x9bbfd6, alpha: 0.4, width: 1 });
 
-    // Rotating rose ticks (card rotates with heading)
     for (let deg = 0; deg < 360; deg += 15) {
       const isMajor = deg % 90 === 0;
-      const tickLen = isMajor ? 4.5 : 2.5;
-      const tickInner = radius - 2 - tickLen;
-      const tickOuter = radius - 2;
+      const tickLen = isMajor ? 8 : 4.2;
+      const tickInner = radius - 4 - tickLen;
+      const tickOuter = radius - 4;
       const a = ((deg - heading) - 90) * DEG;
 
       const x0 = cx + Math.cos(a) * tickInner;
@@ -606,38 +670,37 @@ export class WorldView {
       const x1 = cx + Math.cos(a) * tickOuter;
       const y1 = cy + Math.sin(a) * tickOuter;
 
-      this.playerDot
+      this.topCompass
         .moveTo(x0, y0)
         .lineTo(x1, y1)
         .stroke({
-          color: isMajor ? 0xb8d4e8 : 0x6f8aa0,
-          alpha: isMajor ? 0.78 : 0.42,
-          width: isMajor ? 1.1 : 1,
+          color: isMajor ? 0xcde5f5 : 0x7390a5,
+          alpha: isMajor ? 0.84 : 0.45,
+          width: isMajor ? 1.2 : 1,
         });
     }
 
     const northA = ((0 - heading) - 90) * DEG;
     const southA = ((180 - heading) - 90) * DEG;
-    this.drawCompassRoseTip(this.playerDot, cx, cy, northA, radius - 2, 4.8, 0xe95b63, 0.92);
-    this.drawCompassRoseTip(this.playerDot, cx, cy, southA, radius - 2, 4.8, 0xd6e2ef, 0.84);
+    this.drawCompassRoseTip(this.topCompass, cx, cy, northA, radius - 3, 8, 0xea5f62, 0.92);
+    this.drawCompassRoseTip(this.topCompass, cx, cy, southA, radius - 3, 8, 0xdce8f4, 0.84);
 
-    // Fixed lubber line at top
-    const topY = cy - radius - 2;
-    this.playerDot
+    // Fixed lubber line (forward reference)
+    const topY = cy - radius - 5;
+    this.topCompass
       .moveTo(cx, topY)
-      .lineTo(cx - 3.2, topY - 4.8)
-      .lineTo(cx + 3.2, topY - 4.8)
+      .lineTo(cx - 4.6, topY - 7.2)
+      .lineTo(cx + 4.6, topY - 7.2)
       .closePath()
-      .fill({ color: 0xf4f6fa, alpha: 0.92 });
+      .fill({ color: 0xf5f8fc, alpha: 0.93 });
 
-    // Pivot
-    this.playerDot.circle(cx, cy, 2.6).fill({ color: 0xe4ecf5, alpha: 0.94 });
-    this.playerDot.circle(cx, cy, 1.1).fill({ color: 0x2a3642, alpha: 0.95 });
+    this.topCompass.circle(cx, cy, 3.3).fill({ color: 0xe5edf6, alpha: 0.95 });
+    this.topCompass.circle(cx, cy, 1.25).fill({ color: 0x273441, alpha: 0.95 });
 
     if (autopilotEnabled) {
-      this.playerDot
-        .circle(cx, cy, radius + 7)
-        .stroke({ color: 0x4499cc, alpha: 0.38, width: 1 });
+      this.topCompass
+        .circle(cx, cy, radius + 14)
+        .stroke({ color: 0x44a6da, alpha: 0.34, width: 1 });
     }
   }
 
@@ -701,6 +764,7 @@ export class WorldView {
     this.sourceGraphics.clear();
     this.container.destroy();
     this.playerDot.destroy();
+    this.topCompass.destroy();
     this.horizons.destroy();
     this.worldHorizon.destroy();
     this.grid.destroy();
