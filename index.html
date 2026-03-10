@@ -23,21 +23,24 @@
 
     #performance-hud {
       position: fixed;
-      top: 12px;
-      left: 12px;
-      width: min(320px, calc(100vw - 24px));
-      padding: 10px 11px 11px;
-      border-radius: 10px;
-      border: 1px solid rgba(117, 175, 209, 0.34);
-      background: linear-gradient(160deg, rgba(4, 17, 31, 0.88), rgba(2, 11, 22, 0.78));
+      top: 14px;
+      left: 14px;
+      width: min(252px, calc(100vw - 22px));
+      padding: 7px 8px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(93, 147, 178, 0.24);
+      background:
+        radial-gradient(160% 140% at 0% 0%, rgba(28, 93, 130, 0.2), transparent 62%),
+        linear-gradient(168deg, rgba(4, 15, 27, 0.76), rgba(3, 12, 23, 0.68));
       box-shadow:
-        0 0 0 1px rgba(43, 89, 120, 0.2) inset,
-        0 8px 28px rgba(0, 0, 0, 0.34);
-      backdrop-filter: blur(2px);
-      color: #dcf3ff;
+        0 0 0 1px rgba(40, 83, 111, 0.18) inset,
+        0 6px 18px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(3px) saturate(118%);
+      color: rgba(220, 241, 255, 0.9);
       pointer-events: none;
       z-index: 6;
       font-family: 'Space Mono', 'IBM Plex Mono', 'Menlo', monospace;
+      opacity: 0.9;
     }
 
     #performance-hud .hud-head,
@@ -49,47 +52,47 @@
     }
 
     #performance-hud .hud-head {
-      font-size: 11px;
-      letter-spacing: 0.08em;
+      font-size: 9px;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      color: rgba(180, 219, 240, 0.92);
-      margin-bottom: 8px;
+      color: rgba(162, 207, 232, 0.82);
+      margin-bottom: 5px;
     }
 
     #performance-hud .hud-row {
-      margin-top: 5px;
-      font-size: 11px;
+      margin-top: 3px;
+      font-size: 9.5px;
       letter-spacing: 0.02em;
-      color: rgba(190, 224, 242, 0.92);
+      color: rgba(183, 220, 242, 0.82);
     }
 
     #performance-hud .hud-value {
-      color: #eef8ff;
+      color: rgba(239, 248, 255, 0.94);
     }
 
     #performance-hud .hud-pill {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 58px;
-      padding: 2px 8px;
+      min-width: 48px;
+      padding: 1px 7px;
       border-radius: 999px;
-      border: 1px solid rgba(130, 182, 213, 0.45);
-      background: rgba(40, 86, 113, 0.32);
+      border: 1px solid rgba(111, 161, 191, 0.42);
+      background: rgba(29, 72, 98, 0.3);
       color: #e8f7ff;
-      font-size: 10px;
+      font-size: 8.5px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
 
     #performance-hud .hud-bar {
-      margin-top: 5px;
+      margin-top: 3px;
       width: 100%;
-      height: 6px;
+      height: 4px;
       border-radius: 999px;
       overflow: hidden;
-      background: rgba(63, 103, 132, 0.35);
-      box-shadow: 0 0 0 1px rgba(64, 105, 135, 0.23) inset;
+      background: rgba(56, 94, 121, 0.28);
+      box-shadow: 0 0 0 1px rgba(57, 99, 128, 0.2) inset;
     }
 
     #performance-hud .hud-bar > span {
@@ -102,12 +105,15 @@
     }
 
     #perf-effects {
-      margin-top: 8px;
-      font-size: 10px;
+      margin-top: 6px;
+      font-size: 8.5px;
       line-height: 1.35;
       letter-spacing: 0.02em;
-      color: rgba(166, 205, 228, 0.88);
-      min-height: 26px;
+      color: rgba(151, 193, 218, 0.78);
+      min-height: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     #start-overlay {
@@ -264,6 +270,12 @@
     }
 
     @media (max-width: 640px) {
+      #performance-hud {
+        width: min(228px, calc(100vw - 18px));
+        top: 9px;
+        left: 9px;
+      }
+
       .overlay-panel {
         width: min(92vw, 640px);
       }

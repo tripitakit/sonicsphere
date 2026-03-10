@@ -269,14 +269,16 @@ async function bootstrap(): Promise<void> {
     if (!perfHud) return;
 
     const activeVoices = world.getActiveVoiceCount();
-    const voiceCap = Math.max(1, world.getAdaptiveVoiceCap());
-    const voiceRatio = clamp01(activeVoices / voiceCap);
+    const voiceStartCap = Math.max(1, world.getVoiceStartCap());
+    const voiceSoftCap = Math.max(voiceStartCap, world.getVoiceSoftCap());
+    const voiceRatio = clamp01(activeVoices / voiceSoftCap);
+    const voicePressure = clamp01(activeVoices / voiceStartCap);
     const fxLoad = weatherFxLoad(latestWeatherFrame.fx);
-    const glitchRisk = computeGlitchRisk(fps, voiceRatio, fxLoad);
+    const glitchRisk = computeGlitchRisk(fps, voicePressure, fxLoad);
     const zones = latestWeatherFrame.activeZones;
     const zoneTypeTags = Array.from(new Set(zones.map((z) => z.type)));
 
-    perfHud.tier.textContent = `perf ${PERFORMANCE_TIER}`;
+    perfHud.tier.textContent = `${PERFORMANCE_TIER} profile`;
     perfHud.fps.textContent = `${Math.round(fps)} fps`;
     perfHud.risk.textContent = glitchRisk.label;
     perfHud.risk.style.borderColor = glitchRisk.color;
@@ -285,7 +287,7 @@ async function bootstrap(): Promise<void> {
     perfHud.riskBar.style.width = `${Math.round(glitchRisk.ratio * 100)}%`;
     perfHud.riskBar.style.backgroundColor = glitchRisk.color;
 
-    perfHud.voices.textContent = `${activeVoices}/${voiceCap} (pool ${world.getTotalSourceCount()})`;
+    perfHud.voices.textContent = `${activeVoices}/${voiceSoftCap}`;
     perfHud.voicesBar.style.width = `${Math.round(voiceRatio * 100)}%`;
     perfHud.voicesBar.style.backgroundColor = gaugeColor(voiceRatio);
 
@@ -295,11 +297,11 @@ async function bootstrap(): Promise<void> {
 
     const fx = latestWeatherFrame.fx;
     const zoneLabel = zoneTypeTags.length > 0 ? zoneTypeTags.join(',') : 'none';
-    perfHud.effects.textContent = `zones ${zones.length} [${zoneLabel}] | `
-      + `delay ${Math.round(fx.delayWet * 100)}% @ ${fx.delayTimeSec.toFixed(2)}s | `
-      + `reverb ${Math.round(fx.reverbRoomSize * 100)}% | `
-      + `sweep ${Math.round(fx.bandpassMix * 100)}% | `
-      + `risk ${glitchRisk.label}`;
+    perfHud.effects.textContent = `z:${zones.length} ${zoneLabel} | `
+      + `d:${Math.round(fx.delayWet * 100)}% ${fx.delayTimeSec.toFixed(2)}s | `
+      + `r:${Math.round(fx.reverbRoomSize * 100)}% | `
+      + `s:${Math.round(fx.bandpassMix * 100)}% | `
+      + `start:${voiceStartCap} pool:${world.getTotalSourceCount()}`;
   }
 
   function tick(now: number): void {

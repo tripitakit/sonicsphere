@@ -210,6 +210,14 @@ export class SphereWorld {
     return this.adaptiveMaxActiveSources;
   }
 
+  getVoiceStartCap(): number {
+    return this.adaptiveMaxActiveSources;
+  }
+
+  getVoiceSoftCap(): number {
+    return this.adaptiveMaxActiveSources + ACTIVE_RELEASE_MARGIN;
+  }
+
   getTotalSourceCount(): number {
     return this.sources.length;
   }
