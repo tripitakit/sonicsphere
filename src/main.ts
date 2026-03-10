@@ -8,7 +8,7 @@ import { KeyboardInput }  from './input/KeyboardInput.ts';
 import { Renderer }       from './render/Renderer.ts';
 import { WorldView }      from './render/WorldView.ts';
 import { loadState, saveState } from './persistence/Storage.ts';
-import type { PlayerState } from './types.ts';
+import type { PlayerState, WeatherFxBlend } from './types.ts';
 
 function randomInitialPlayerState(): PlayerState {
   // Uniform sample on sphere surface for latitude + independent longitude.
@@ -19,12 +19,126 @@ function randomInitialPlayerState(): PlayerState {
   return { position: { lat, lon }, heading };
 }
 
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+type PerformanceHud = {
+  tier: HTMLSpanElement;
+  fps: HTMLSpanElement;
+  risk: HTMLSpanElement;
+  riskBar: HTMLSpanElement;
+  voices: HTMLSpanElement;
+  voicesBar: HTMLSpanElement;
+  weather: HTMLSpanElement;
+  weatherBar: HTMLSpanElement;
+  effects: HTMLDivElement;
+};
+
+function getPerformanceHud(): PerformanceHud | null {
+  const tier = document.getElementById('perf-tier') as HTMLSpanElement | null;
+  const fps = document.getElementById('perf-fps') as HTMLSpanElement | null;
+  const risk = document.getElementById('perf-risk') as HTMLSpanElement | null;
+  const riskBar = document.getElementById('perf-risk-bar') as HTMLSpanElement | null;
+  const voices = document.getElementById('perf-voices') as HTMLSpanElement | null;
+  const voicesBar = document.getElementById('perf-voices-bar') as HTMLSpanElement | null;
+  const weather = document.getElementById('perf-weather') as HTMLSpanElement | null;
+  const weatherBar = document.getElementById('perf-weather-bar') as HTMLSpanElement | null;
+  const effects = document.getElementById('perf-effects') as HTMLDivElement | null;
+  if (!tier || !fps || !risk || !riskBar || !voices || !voicesBar || !weather || !weatherBar || !effects) {
+    return null;
+  }
+  return { tier, fps, risk, riskBar, voices, voicesBar, weather, weatherBar, effects };
+}
+
+function weatherFxLoad(fx: WeatherFxBlend): number {
+  const wet = clamp01(fx.wetLevel / 0.3);
+  const delay = clamp01(fx.delayWet / 0.5);
+  const reverb = clamp01(fx.reverbRoomSize / 0.82);
+  const sweep = clamp01(fx.bandpassMix / 0.72);
+  return clamp01(wet * 0.32 + delay * 0.3 + reverb * 0.24 + sweep * 0.14);
+}
+
+function gaugeColor(ratio: number): string {
+  if (ratio >= 0.9) return '#ff7a74';
+  if (ratio >= 0.72) return '#f0cb6c';
+  return '#76ddbc';
+}
+
+function weatherGaugeColor(ratio: number): string {
+  if (ratio >= 0.72) return '#ffb567';
+  if (ratio >= 0.4) return '#87c8ff';
+  return '#6acda2';
+}
+
+type GlitchRisk = {
+  ratio: number;
+  label: 'low' | 'med' | 'high';
+  color: string;
+  background: string;
+  text: string;
+};
+
+type GlitchRiskThresholds = {
+  med: number;
+  high: number;
+};
+
+function getGlitchRiskThresholds(): GlitchRiskThresholds {
+  const isWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent);
+  // On Windows we trigger warnings earlier to be more conservative on weaker machines/drivers.
+  if (isWindows) return { med: 0.4, high: 0.64 };
+  return { med: 0.46, high: 0.72 };
+}
+
+function computeGlitchRisk(fps: number, voiceRatio: number, fxLoad: number): GlitchRisk {
+  const thresholds = getGlitchRiskThresholds();
+  const targetFps = Math.max(24, PERFORMANCE_BUDGET.loop.renderHz);
+  const fpsPressure = clamp01((targetFps - fps) / (targetFps * 0.42));
+  const voicePressure = clamp01(voiceRatio);
+  const fxPressure = clamp01(fxLoad);
+  const comboBoost = clamp01((voicePressure - 0.72) / 0.28) * clamp01((fxPressure - 0.55) / 0.45);
+  const ratio = clamp01(
+    fpsPressure * 0.52
+      + voicePressure * 0.3
+      + fxPressure * 0.18
+      + comboBoost * 0.18,
+  );
+
+  if (ratio >= thresholds.high) {
+    return {
+      ratio,
+      label: 'high',
+      color: '#ff7a74',
+      background: 'rgba(145, 58, 54, 0.55)',
+      text: '#fff3f2',
+    };
+  }
+  if (ratio >= thresholds.med) {
+    return {
+      ratio,
+      label: 'med',
+      color: '#f0cb6c',
+      background: 'rgba(116, 96, 47, 0.52)',
+      text: '#fff8e8',
+    };
+  }
+  return {
+    ratio,
+    label: 'low',
+    color: '#76ddbc',
+    background: 'rgba(44, 103, 85, 0.5)',
+    text: '#eafef6',
+  };
+}
+
 async function bootstrap(): Promise<void> {
   const overlay   = document.getElementById('start-overlay') as HTMLDivElement;
   const overlayTitle = document.getElementById('overlay-title') as HTMLSpanElement | null;
   const overlayHintPrimary = document.getElementById('overlay-hint-primary') as HTMLSpanElement | null;
   const overlayHintControls = document.getElementById('overlay-hint-controls') as HTMLSpanElement | null;
   const container = document.getElementById('canvas-container') as HTMLDivElement;
+  const perfHud = getPerformanceHud();
 
   // Init subsystems
   const audio    = new AudioEngine();
@@ -108,6 +222,7 @@ async function bootstrap(): Promise<void> {
     try {
       await audio.stop();
       world.suspendAllVoices();
+      updatePerformanceHud(fpsEma);
     } finally {
       transitionInFlight = false;
     }
@@ -147,10 +262,52 @@ async function bootstrap(): Promise<void> {
 
   // Game loop
   let lastTime    = performance.now();
+  let fpsEma = 60;
+  let hudAccumulator = 0;
+
+  function updatePerformanceHud(fps: number): void {
+    if (!perfHud) return;
+
+    const activeVoices = world.getActiveVoiceCount();
+    const voiceCap = Math.max(1, world.getAdaptiveVoiceCap());
+    const voiceRatio = clamp01(activeVoices / voiceCap);
+    const fxLoad = weatherFxLoad(latestWeatherFrame.fx);
+    const glitchRisk = computeGlitchRisk(fps, voiceRatio, fxLoad);
+    const zones = latestWeatherFrame.activeZones;
+    const zoneTypeTags = Array.from(new Set(zones.map((z) => z.type)));
+
+    perfHud.tier.textContent = `perf ${PERFORMANCE_TIER}`;
+    perfHud.fps.textContent = `${Math.round(fps)} fps`;
+    perfHud.risk.textContent = glitchRisk.label;
+    perfHud.risk.style.borderColor = glitchRisk.color;
+    perfHud.risk.style.backgroundColor = glitchRisk.background;
+    perfHud.risk.style.color = glitchRisk.text;
+    perfHud.riskBar.style.width = `${Math.round(glitchRisk.ratio * 100)}%`;
+    perfHud.riskBar.style.backgroundColor = glitchRisk.color;
+
+    perfHud.voices.textContent = `${activeVoices}/${voiceCap} (pool ${world.getTotalSourceCount()})`;
+    perfHud.voicesBar.style.width = `${Math.round(voiceRatio * 100)}%`;
+    perfHud.voicesBar.style.backgroundColor = gaugeColor(voiceRatio);
+
+    perfHud.weather.textContent = `${Math.round(fxLoad * 100)}%`;
+    perfHud.weatherBar.style.width = `${Math.round(fxLoad * 100)}%`;
+    perfHud.weatherBar.style.backgroundColor = weatherGaugeColor(fxLoad);
+
+    const fx = latestWeatherFrame.fx;
+    const zoneLabel = zoneTypeTags.length > 0 ? zoneTypeTags.join(',') : 'none';
+    perfHud.effects.textContent = `zones ${zones.length} [${zoneLabel}] | `
+      + `delay ${Math.round(fx.delayWet * 100)}% @ ${fx.delayTimeSec.toFixed(2)}s | `
+      + `reverb ${Math.round(fx.reverbRoomSize * 100)}% | `
+      + `sweep ${Math.round(fx.bandpassMix * 100)}% | `
+      + `risk ${glitchRisk.label}`;
+  }
 
   function tick(now: number): void {
     const dt = Math.min((now - lastTime) / 1000, 0.1); // cap delta at 100ms
     lastTime = now;
+    const fpsNow = 1 / Math.max(1e-3, dt);
+    fpsEma = fpsEma * 0.9 + fpsNow * 0.1;
+    hudAccumulator += dt;
     const elapsedSecs = worldElapsedSeconds();
 
     if (paused) {
@@ -204,6 +361,11 @@ async function bootstrap(): Promise<void> {
       renderAccumulator %= renderStepSec;
     }
 
+    if (hudAccumulator >= 0.18) {
+      updatePerformanceHud(fpsEma);
+      hudAccumulator = 0;
+    }
+
     // Save position every 5 seconds
     if (elapsedSecs - lastSaveWorldElapsed >= 5) {
       persistNow();
@@ -213,6 +375,7 @@ async function bootstrap(): Promise<void> {
     requestAnimationFrame(tick);
   }
 
+  updatePerformanceHud(0);
   requestAnimationFrame(tick);
 }
 

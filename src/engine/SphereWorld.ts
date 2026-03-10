@@ -31,6 +31,7 @@ export class SphereWorld {
   // Pre-allocated sort buffer to avoid per-frame GC pressure
   private sortBuf: Array<{ idx: number; dist: number }>;
   private adaptiveMaxActiveSources = TARGET_MAX_ACTIVE_SOURCES;
+  private activeVoiceCount = 0;
   private frameDtEma = 1 / 60;
   private lastUpdateElapsed: number | null = null;
   private lastAdaptAt = 0;
@@ -149,6 +150,7 @@ export class SphereWorld {
     this.lastUpdateElapsed = elapsedSeconds;
 
     let startsThisFrame = 0;
+    let activeVoices = 0;
 
     for (let i = 0; i < this.sources.length; i++) {
       const entry = this.sortBuf[i]!;
@@ -188,18 +190,37 @@ export class SphereWorld {
       if (!wasAudible && source.isAudible()) {
         startsThisFrame++;
       }
+      if (source.isAudible()) {
+        activeVoices++;
+      }
     }
+
+    this.activeVoiceCount = activeVoices;
   }
 
   getSources(): readonly SoundSource[] {
     return this.sources;
   }
 
+  getActiveVoiceCount(): number {
+    return this.activeVoiceCount;
+  }
+
+  getAdaptiveVoiceCap(): number {
+    return this.adaptiveMaxActiveSources;
+  }
+
+  getTotalSourceCount(): number {
+    return this.sources.length;
+  }
+
   suspendAllVoices(): void {
     for (const source of this.sources) source.forceStop();
+    this.activeVoiceCount = 0;
   }
 
   dispose(): void {
     for (const source of this.sources) source.dispose();
+    this.activeVoiceCount = 0;
   }
 }

@@ -21,6 +21,95 @@
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
     #canvas-container { width: 100%; height: 100%; }
 
+    #performance-hud {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      width: min(320px, calc(100vw - 24px));
+      padding: 10px 11px 11px;
+      border-radius: 10px;
+      border: 1px solid rgba(117, 175, 209, 0.34);
+      background: linear-gradient(160deg, rgba(4, 17, 31, 0.88), rgba(2, 11, 22, 0.78));
+      box-shadow:
+        0 0 0 1px rgba(43, 89, 120, 0.2) inset,
+        0 8px 28px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(2px);
+      color: #dcf3ff;
+      pointer-events: none;
+      z-index: 6;
+      font-family: 'Space Mono', 'IBM Plex Mono', 'Menlo', monospace;
+    }
+
+    #performance-hud .hud-head,
+    #performance-hud .hud-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    #performance-hud .hud-head {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(180, 219, 240, 0.92);
+      margin-bottom: 8px;
+    }
+
+    #performance-hud .hud-row {
+      margin-top: 5px;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      color: rgba(190, 224, 242, 0.92);
+    }
+
+    #performance-hud .hud-value {
+      color: #eef8ff;
+    }
+
+    #performance-hud .hud-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 58px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(130, 182, 213, 0.45);
+      background: rgba(40, 86, 113, 0.32);
+      color: #e8f7ff;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #performance-hud .hud-bar {
+      margin-top: 5px;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(63, 103, 132, 0.35);
+      box-shadow: 0 0 0 1px rgba(64, 105, 135, 0.23) inset;
+    }
+
+    #performance-hud .hud-bar > span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      transition: width 140ms linear, background-color 160ms ease;
+      background: #78d8ba;
+    }
+
+    #perf-effects {
+      margin-top: 8px;
+      font-size: 10px;
+      line-height: 1.35;
+      letter-spacing: 0.02em;
+      color: rgba(166, 205, 228, 0.88);
+      min-height: 26px;
+    }
+
     #start-overlay {
       position: fixed;
       inset: 0;
@@ -199,6 +288,28 @@
       <span class="hint overlay-headphones">headphones recommended</span>
       <span class="overlay-footnote">explore by listening</span>
     </div>
+  </div>
+  <div id="performance-hud" aria-live="off">
+    <div class="hud-head">
+      <span id="perf-tier">perf</span>
+      <span id="perf-fps">-- fps</span>
+    </div>
+    <div class="hud-row">
+      <span>Glitch Risk</span>
+      <span class="hud-pill" id="perf-risk">low</span>
+    </div>
+    <div class="hud-bar"><span id="perf-risk-bar"></span></div>
+    <div class="hud-row">
+      <span>Voices</span>
+      <span class="hud-value" id="perf-voices">0/0</span>
+    </div>
+    <div class="hud-bar"><span id="perf-voices-bar"></span></div>
+    <div class="hud-row">
+      <span>Weather FX</span>
+      <span class="hud-value" id="perf-weather">0%</span>
+    </div>
+    <div class="hud-bar"><span id="perf-weather-bar"></span></div>
+    <div id="perf-effects">zones: --</div>
   </div>
   <div id="canvas-container"></div>
   <script type="module" src="/src/main.ts"></script>
