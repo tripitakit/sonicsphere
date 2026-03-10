@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import type { ActiveWeatherZone, SphericalCoord, WeatherZoneType } from '../types.ts';
+import type { ActiveWeatherZone, SoundEngineType, SphericalCoord, WeatherZoneType } from '../types.ts';
 import type { SoundSource } from '../engine/SoundSource.ts';
 import {
   chordDistance,
@@ -82,6 +82,19 @@ type WeatherPatchProfile = {
   ringLightness: number;
 };
 
+type SourceGlyphShape = 'circle' | 'triangle' | 'square' | 'hexagon';
+type SourceEngineVisualProfile = {
+  breathRate: number;
+  breathDepth: number;
+  ringRate: number;
+  ringStartMul: number;
+  ringTravelMul: number;
+  ringAlpha: number;
+  ringWidth: number;
+  silentPulseRate: number;
+  silentPulseDepth: number;
+};
+
 // Distinct hue families, deliberately far from the audible-zone blue palette.
 const WEATHER_TYPE_COLOR_PROFILE: Record<WeatherZoneType, WeatherPatchProfile> = {
   mist: {
@@ -125,6 +138,53 @@ const WEATHER_VISUAL_TUNING = {
     ring: 0.34,
   },
 } as const;
+
+const SOURCE_ENGINE_VISUAL_PROFILE: Record<SoundEngineType, SourceEngineVisualProfile> = {
+  subtractive: {
+    breathRate: 1.6,
+    breathDepth: 0.09,
+    ringRate: 0.66,
+    ringStartMul: 1.75,
+    ringTravelMul: 1.6,
+    ringAlpha: 0.22,
+    ringWidth: 0.95,
+    silentPulseRate: 1.1,
+    silentPulseDepth: 0.07,
+  },
+  noise: {
+    breathRate: 2.4,
+    breathDepth: 0.15,
+    ringRate: 1.02,
+    ringStartMul: 1.55,
+    ringTravelMul: 2.2,
+    ringAlpha: 0.3,
+    ringWidth: 1.4,
+    silentPulseRate: 1.8,
+    silentPulseDepth: 0.12,
+  },
+  fm: {
+    breathRate: 1.9,
+    breathDepth: 0.07,
+    ringRate: 0.8,
+    ringStartMul: 1.9,
+    ringTravelMul: 1.35,
+    ringAlpha: 0.27,
+    ringWidth: 1.2,
+    silentPulseRate: 1.35,
+    silentPulseDepth: 0.06,
+  },
+  resonator: {
+    breathRate: 1.25,
+    breathDepth: 0.13,
+    ringRate: 0.54,
+    ringStartMul: 1.95,
+    ringTravelMul: 1.95,
+    ringAlpha: 0.33,
+    ringWidth: 1.55,
+    silentPulseRate: 0.95,
+    silentPulseDepth: 0.1,
+  },
+};
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -176,6 +236,20 @@ function hashJitter(hash: number, bitOffset: number): number {
 function inverseWidthForSpeed(speed: number): number {
   const t = clamp01((speed - PLAYER_TRAIL_SPEED_SLOW) / (PLAYER_TRAIL_SPEED_FAST - PLAYER_TRAIL_SPEED_SLOW));
   return PLAYER_TRAIL_WIDTH_AT_SLOW + (PLAYER_TRAIL_WIDTH_AT_FAST - PLAYER_TRAIL_WIDTH_AT_SLOW) * t;
+}
+
+function glyphShapeForEngine(engine: SoundEngineType): SourceGlyphShape {
+  switch (engine) {
+    case 'noise':
+      return 'triangle';
+    case 'fm':
+      return 'square';
+    case 'resonator':
+      return 'hexagon';
+    case 'subtractive':
+    default:
+      return 'circle';
+  }
 }
 
 function chordRadiusFromDegrees(arcDegrees: number): number {
@@ -299,34 +373,38 @@ export class WorldView {
 
       const norm = Math.max(0, 1 - dist / HEARING_RADIUS);
       const palette = this.getArchetypePalette(source.getArchetypeName());
+      const engine = source.getEngineType();
+      const glyphShape = glyphShapeForEngine(engine);
+      const visual = SOURCE_ENGINE_VISUAL_PROFILE[engine];
 
       g.clear();
 
       if (source.isAudible()) {
         // Archetype-coloured audible glyph: halo + body + core.
-        const breath = 0.9 + 0.1 * Math.sin(elapsed * 1.8 + phaseA);
+        const breath = 1 + visual.breathDepth * Math.sin(elapsed * visual.breathRate + phaseA);
         const radius = (3.7 + norm * 6.3) * breath;
 
-        g.circle(0, 0, radius * 2.5).fill({ color: palette.glowOuter, alpha: 0.045 });
-        g.circle(0, 0, radius * 1.65).fill({ color: palette.glowInner, alpha: 0.11 });
-        g.circle(0, 0, radius).fill({ color: palette.body, alpha: 0.78 });
-        g.circle(0, 0, radius * 0.38).fill({ color: palette.core, alpha: 0.92 });
+        this.drawSourceGlyph(g, glyphShape, radius * 2.5, palette.glowOuter, 0.045);
+        this.drawSourceGlyph(g, glyphShape, radius * 1.65, palette.glowInner, 0.11);
+        this.drawSourceGlyph(g, glyphShape, radius, palette.body, 0.78);
+        this.drawSourceGlyph(g, glyphShape, radius * 0.38, palette.core, 0.92);
 
         // Faint expanding sonar ring
-        const ringT = (elapsed * 0.7 + phaseB) % 1;
-        const ringR = radius * (1.8 + ringT * 1.8);
-        const ringA = 0.25 * (1 - ringT);
-        g.circle(0, 0, ringR).stroke({ color: palette.ring, alpha: ringA, width: 1 });
+        const ringT = (elapsed * visual.ringRate + phaseB) % 1;
+        const ringR = radius * (visual.ringStartMul + ringT * visual.ringTravelMul);
+        const ringA = visual.ringAlpha * (1 - ringT);
+        const ringWidth = visual.ringWidth + norm * 0.22;
+        this.drawSourceGlyph(g, glyphShape, ringR, palette.ring, ringA, ringWidth);
 
       } else {
         // Dimmer archetype-coloured hint when source is currently silent.
-        const pulse  = 0.92 + 0.08 * Math.sin(elapsed * 1.2 + phaseA);
+        const pulse  = 1 + visual.silentPulseDepth * Math.sin(elapsed * visual.silentPulseRate + phaseA);
         const radius = (2 + norm * 5) * pulse;
         const alpha  = 0.06 + norm * 0.28;
 
-        g.circle(0, 0, radius * 2.0).fill({ color: palette.silentOuter, alpha: alpha * 0.1 });
-        g.circle(0, 0, radius * 1.3).fill({ color: palette.silentInner, alpha: alpha * 0.2 });
-        g.circle(0, 0, radius).fill({ color: palette.silentCore, alpha });
+        this.drawSourceGlyph(g, glyphShape, radius * 2.0, palette.silentOuter, alpha * 0.1);
+        this.drawSourceGlyph(g, glyphShape, radius * 1.3, palette.silentInner, alpha * 0.2);
+        this.drawSourceGlyph(g, glyphShape, radius, palette.silentCore, alpha);
       }
     }
 
@@ -856,6 +934,65 @@ export class WorldView {
       .lineTo(baseX - px, baseY - py)
       .closePath()
       .fill({ color, alpha });
+  }
+
+  private drawSourceGlyph(
+    target: PIXI.Graphics,
+    shape: SourceGlyphShape,
+    radius: number,
+    color: number,
+    alpha: number,
+    strokeWidth = 0,
+  ): void {
+    if (shape === 'circle') {
+      if (strokeWidth > 0) {
+        target.circle(0, 0, radius).stroke({ color, alpha, width: strokeWidth });
+      } else {
+        target.circle(0, 0, radius).fill({ color, alpha });
+      }
+      return;
+    }
+
+    const sides = shape === 'triangle' ? 3 : shape === 'square' ? 4 : 6;
+    const startAngle = shape === 'triangle'
+      ? -Math.PI / 2
+      : shape === 'square'
+        ? Math.PI / 4
+        : -Math.PI / 2;
+    this.drawRegularPolygon(target, sides, radius, startAngle, color, alpha, strokeWidth);
+  }
+
+  private drawRegularPolygon(
+    target: PIXI.Graphics,
+    sides: number,
+    radius: number,
+    startAngle: number,
+    color: number,
+    alpha: number,
+    strokeWidth: number,
+  ): void {
+    let firstX = 0;
+    let firstY = 0;
+
+    for (let i = 0; i < sides; i++) {
+      const a = startAngle + (Math.PI * 2 * i) / sides;
+      const x = Math.cos(a) * radius;
+      const y = Math.sin(a) * radius;
+      if (i === 0) {
+        firstX = x;
+        firstY = y;
+        target.moveTo(x, y);
+      } else {
+        target.lineTo(x, y);
+      }
+    }
+
+    target.lineTo(firstX, firstY).closePath();
+    if (strokeWidth > 0) {
+      target.stroke({ color, alpha, width: strokeWidth });
+    } else {
+      target.fill({ color, alpha });
+    }
   }
 
   private getWeatherZonePalette(zone: ActiveWeatherZone): WeatherPatchPalette {
