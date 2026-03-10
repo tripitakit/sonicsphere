@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import type { SphericalCoord } from '../types.ts';
+import type { ActiveWeatherZone, SphericalCoord, WeatherZoneType } from '../types.ts';
 import type { SoundSource } from '../engine/SoundSource.ts';
 import {
   chordDistance,
@@ -65,6 +65,36 @@ type ArchetypePalette = {
   silentInner: number;
   silentCore: number;
 };
+type WeatherPatchPalette = {
+  outer: number;
+  inner: number;
+  core: number;
+  ring: number;
+};
+
+const WEATHER_PATCH_PALETTE: Record<WeatherZoneType, WeatherPatchPalette> = {
+  mist: {
+    // Warm amber family (kept away from audible-zone blues).
+    outer: 0x5b3d1e,
+    inner: 0x8a5f2a,
+    core: 0xc18a3d,
+    ring: 0xe9b966,
+  },
+  echo: {
+    // Rosy coral family.
+    outer: 0x5a2233,
+    inner: 0x8a3450,
+    core: 0xc54e76,
+    ring: 0xef8aaa,
+  },
+  ion: {
+    // Electric green family.
+    outer: 0x1e5b2a,
+    inner: 0x2e8f41,
+    core: 0x4fc765,
+    ring: 0x8ef0a0,
+  },
+};
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -109,6 +139,11 @@ function inverseWidthForSpeed(speed: number): number {
   return PLAYER_TRAIL_WIDTH_AT_SLOW + (PLAYER_TRAIL_WIDTH_AT_FAST - PLAYER_TRAIL_WIDTH_AT_SLOW) * t;
 }
 
+function chordRadiusFromDegrees(arcDegrees: number): number {
+  const halfRad = Math.max(0, arcDegrees) * (Math.PI / 180) * 0.5;
+  return 2 * SPHERE_RADIUS * Math.sin(halfRad);
+}
+
 export class WorldView {
   private container: PIXI.Container;
   private sourceGraphics = new Map<string, PIXI.Graphics>();
@@ -119,6 +154,7 @@ export class WorldView {
   private horizons: PIXI.Graphics;
   private grid: PIXI.Graphics;
   private trail: PIXI.Graphics;
+  private weatherZones: PIXI.Graphics;
   private zones: PIXI.Graphics;     // filled zone discs, between background and source dots
   private background: PIXI.Graphics;
   private playerTrailHistory: Array<{ pos: SphericalCoord; t: number }> = [];
@@ -130,6 +166,7 @@ export class WorldView {
     // Layer order (bottom → top):
     //   background  — full-screen void colour, audio-reactive tint
     //   zones       — filled discs for world/sonic surfaces
+    //   weatherZones— diffuse weather patches that drive global FX
     //   trail       — faded player path on visible hemisphere
     //   grid        — poles + equator + lat/lon guide lines
     //   worldHorizon— always-visible boundary of the visible world disk
@@ -143,6 +180,11 @@ export class WorldView {
 
     this.zones = new PIXI.Graphics();
     stage.addChild(this.zones);
+
+    this.weatherZones = new PIXI.Graphics();
+    // Additive blending makes overlapping weather patches sum their colors.
+    this.weatherZones.blendMode = 'add';
+    stage.addChild(this.weatherZones);
 
     this.trail = new PIXI.Graphics();
     stage.addChild(this.trail);
@@ -170,6 +212,7 @@ export class WorldView {
     playerPos: SphericalCoord,
     playerHeading: number,
     sources: readonly SoundSource[],
+    activeWeatherZones: readonly ActiveWeatherZone[],
     screenW: number,
     screenH: number,
     elapsed: number,
@@ -186,6 +229,7 @@ export class WorldView {
 
     this.drawBackground(screenW, screenH, audibleCount);
     this.drawZones(cx, cy, audibleCount, elapsed);
+    this.drawWeatherZones(playerPos, playerHeading, activeWeatherZones, cx, cy, elapsed);
     this.drawPlayerTrail(playerPos, playerHeading, cx, cy, elapsed);
     this.drawGraticule(playerPos, playerHeading, cx, cy);
     this.drawVisibleWorldHorizon(cx, cy);
@@ -569,6 +613,51 @@ export class WorldView {
       .stroke({ color: COLOR_WORLD_VIGNETTE, alpha: 0.42, width: 12 });
   }
 
+  private drawWeatherZones(
+    playerPos: SphericalCoord,
+    playerHeading: number,
+    activeWeatherZones: readonly ActiveWeatherZone[],
+    cx: number,
+    cy: number,
+    elapsed: number,
+  ): void {
+    this.weatherZones.clear();
+
+    for (const zone of activeWeatherZones) {
+      if (!this.isNearHemisphere(playerPos, zone.center)) continue;
+
+      const projected = this.project(playerPos, playerHeading, zone.center);
+      const outerRadiusPx = chordRadiusFromDegrees(zone.radiusDeg + zone.featherDeg) * this.worldScale;
+      const coreRadiusPx = chordRadiusFromDegrees(zone.radiusDeg) * this.worldScale;
+      const distFromPlayerPx = Math.hypot(projected.x, projected.y);
+
+      // Skip far-off patches that are fully outside the visible world disc.
+      if (distFromPlayerPx - outerRadiusPx > this.worldHorizonPx) continue;
+
+      const x = cx + projected.x;
+      const y = cy + projected.y;
+      const palette = WEATHER_PATCH_PALETTE[zone.type];
+      const roleBoost = zone.role === 'strong' ? 1 : 0.62;
+      const motion = zone.type === 'ion' ? 1.85 : zone.type === 'echo' ? 0.82 : 0.56;
+      const pulse = 0.94 + 0.06 * Math.sin(elapsed * motion + distFromPlayerPx * 0.004);
+      const baseAlpha = clamp01(zone.influence) * (zone.role === 'strong' ? 0.24 : 0.16);
+      const alpha = baseAlpha * roleBoost;
+
+      this.weatherZones
+        .circle(x, y, outerRadiusPx * pulse)
+        .fill({ color: palette.outer, alpha: alpha * 0.28 });
+      this.weatherZones
+        .circle(x, y, coreRadiusPx * (0.96 + pulse * 0.04))
+        .fill({ color: palette.inner, alpha: alpha * 0.33 });
+      this.weatherZones
+        .circle(x, y, coreRadiusPx * 0.58)
+        .fill({ color: palette.core, alpha: alpha * 0.35 });
+      this.weatherZones
+        .circle(x, y, coreRadiusPx * (1.02 + 0.02 * pulse))
+        .stroke({ color: palette.ring, alpha: alpha * 0.22, width: 1.1 });
+    }
+  }
+
   private drawHorizons(cx: number, cy: number, audibleCount: number, elapsed: number): void {
     this.horizons.clear();
 
@@ -769,6 +858,7 @@ export class WorldView {
     this.worldHorizon.destroy();
     this.grid.destroy();
     this.trail.destroy();
+    this.weatherZones.destroy();
     this.zones.destroy();
     this.background.destroy();
   }

@@ -2,6 +2,7 @@ import { AudioEngine }    from './engine/AudioEngine.ts';
 import { SphereWorld }    from './engine/SphereWorld.ts';
 import { Player }         from './engine/Player.ts';
 import { Autopilot }      from './engine/Autopilot.ts';
+import { WeatherZoneEngine } from './engine/WeatherZoneEngine.ts';
 import { KeyboardInput }  from './input/KeyboardInput.ts';
 import { Renderer }       from './render/Renderer.ts';
 import { WorldView }      from './render/WorldView.ts';
@@ -38,6 +39,7 @@ async function bootstrap(): Promise<void> {
   const player = new Player(playerInitial);
 
   const world     = new SphereWorld();
+  const weather   = new WeatherZoneEngine();
   const input     = new KeyboardInput();
   const autopilot = new Autopilot();
   const worldView = new WorldView(renderer.stage);
@@ -45,6 +47,7 @@ async function bootstrap(): Promise<void> {
   let paused = true;
   let transitionInFlight = false;
   let lastSaveWorldElapsed = 0;
+  let latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
 
   function worldElapsedSeconds(): number {
     return Math.max(0, (Date.now() - worldEpochMs) / 1000);
@@ -153,6 +156,7 @@ async function bootstrap(): Promise<void> {
     player.update(dt, intent.forward, intent.turn);
 
     const playerState = player.getState();
+    latestWeatherFrame = weather.update(elapsedSecs, playerState.position);
 
     // Update world (audio + oscillations)
     world.update(
@@ -162,12 +166,14 @@ async function bootstrap(): Promise<void> {
       audio.masterGain,
       audio.isStarted(),
     );
+    audio.applyWeatherBlend(latestWeatherFrame.fx);
 
     // Render
     worldView.update(
       playerState.position,
       playerState.heading,
       world.getSources(),
+      latestWeatherFrame.activeZones,
       renderer.width,
       renderer.height,
       elapsedSecs,

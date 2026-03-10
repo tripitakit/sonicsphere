@@ -62,3 +62,31 @@ export interface PersistedState {
   // Last time we wrote state, useful for diagnostics and future migration.
   lastSeenAtMs?: number;
 }
+
+export type WeatherZoneType = 'mist' | 'echo' | 'ion';
+export type WeatherZoneRole = 'strong' | 'background';
+
+export interface ActiveWeatherZone {
+  id: string;
+  type: WeatherZoneType;
+  role: WeatherZoneRole;
+  center: SphericalCoord;
+  radiusDeg: number;
+  featherDeg: number;
+  influence: number; // 0..1 after zone intensity + distance falloff
+}
+
+export interface WeatherFxBlend {
+  wetLevel: number;           // overall FX return amount
+  delayTimeSec: number;       // free/organic delay time (seconds)
+  delayFeedback: number;      // 0..1
+  delayWet: number;           // wet mix inside feedback delay
+  reverbRoomSize: number;     // 0..1
+  highpassHz: number;         // pre-FX high-pass cutoff
+  lowpassHz: number;          // pre-FX low-pass cutoff
+  bandpassMix: number;        // crossfade into rapid-sweep band-pass lane
+  bandpassQ: number;          // resonance for the band-pass lane
+  bandpassSweepHz: number;    // LFO rate for rapid sweep
+  bandpassSweepMinHz: number; // LFO minimum frequency
+  bandpassSweepMaxHz: number; // LFO maximum frequency
+}
