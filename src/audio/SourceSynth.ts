@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { SoundArchetype, SourceVariation } from '../types.ts';
+import { PERFORMANCE_BUDGET } from '../engine/PerformanceBudget.ts';
 
 /**
  * Tone.js signal chain for a single sound source.
@@ -12,20 +13,22 @@ import type { SoundArchetype, SourceVariation } from '../types.ts';
 export class SourceSynth {
   private mainOsc:      Tone.Oscillator;
   private subOsc:       Tone.Oscillator;
-  private airOsc:       Tone.Oscillator;
+  private airOsc:       Tone.Oscillator | null;
   private mainMix:      Tone.Gain;
   private subMix:       Tone.Gain;
-  private airMix:       Tone.Gain;
+  private airMix:       Tone.Gain | null;
   private filter:       Tone.Filter;
   private envelope:     Tone.AmplitudeEnvelope;
   private ampModGain:   Tone.Gain;
   private distanceGain: Tone.Gain;
   private panner:       Tone.Panner3D;
   private lfo:          Tone.LFO;
-  private timbreLfo:    Tone.LFO;
+  private timbreLfo:    Tone.LFO | null;
   private releaseSeconds: number;
   private active = false;
   private disposeTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastDistanceGain = 0;
+  private lastPos = { x: 0, y: 0, z: -1 };
 
   constructor(
     private readonly archetype: SoundArchetype,
@@ -42,15 +45,20 @@ export class SourceSynth {
 
     this.mainOsc = new Tone.Oscillator(tunedFreq, archetype.waveform);
     this.subOsc = new Tone.Oscillator(tunedFreq * 0.5, 'sine');
-    this.airOsc = new Tone.Oscillator(
-      tunedFreq * 1.5,
-      archetype.waveform === 'sine' ? 'triangle' : 'sawtooth',
-    );
 
     // Rich drone blend: stable body + low sub + bright texture partial
     this.mainMix = new Tone.Gain(0.58);
     this.subMix  = new Tone.Gain(0.26);
-    this.airMix  = new Tone.Gain(0.19);
+    if (PERFORMANCE_BUDGET.synth.enableAirOsc) {
+      this.airOsc = new Tone.Oscillator(
+        tunedFreq * 1.5,
+        archetype.waveform === 'sine' ? 'triangle' : 'sawtooth',
+      );
+      this.airMix = new Tone.Gain(0.19);
+    } else {
+      this.airOsc = null;
+      this.airMix = null;
+    }
 
     this.filter = new Tone.Filter({
       type:      archetype.filter.type,
@@ -80,7 +88,7 @@ export class SourceSynth {
     this.distanceGain = new Tone.Gain(0);
 
     this.panner = new Tone.Panner3D({
-      panningModel:  'HRTF',
+      panningModel:  PERFORMANCE_BUDGET.synth.panningModel,
       distanceModel: 'linear',
       rolloffFactor: 1,
       refDistance:   1,
@@ -101,21 +109,25 @@ export class SourceSynth {
       min: 1 - ampDepth,
       max: 1,
     });
-    this.timbreLfo = new Tone.LFO({
-      frequency: isRhythmic
-        ? Math.min(2.4, Math.max(0.06, tunedLfoRate * 0.22))
-        : Math.max(0.01, tunedLfoRate * 0.054),
-      min: Math.max(40, tunedFilter * 0.58),
-      max: Math.max(80, tunedFilter * 1.42),
-    });
+    this.timbreLfo = PERFORMANCE_BUDGET.synth.enableTimbreLfo
+      ? new Tone.LFO({
+          frequency: isRhythmic
+            ? Math.min(2.4, Math.max(0.06, tunedLfoRate * 0.22))
+            : Math.max(0.01, tunedLfoRate * 0.054),
+          min: Math.max(40, tunedFilter * 0.58),
+          max: Math.max(80, tunedFilter * 1.42),
+        })
+      : null;
 
     // Wire signal chain
     this.mainOsc.connect(this.mainMix);
     this.subOsc.connect(this.subMix);
-    this.airOsc.connect(this.airMix);
     this.mainMix.connect(this.filter);
     this.subMix.connect(this.filter);
-    this.airMix.connect(this.filter);
+    if (this.airOsc && this.airMix) {
+      this.airOsc.connect(this.airMix);
+      this.airMix.connect(this.filter);
+    }
     this.filter.connect(this.envelope);
     this.envelope.connect(this.ampModGain);
     this.ampModGain.connect(this.distanceGain);
@@ -124,7 +136,7 @@ export class SourceSynth {
 
     // Wire slow modulators (amplitude + timbre only; pitch remains fixed)
     this.lfo.connect(this.ampModGain.gain);
-    this.timbreLfo.connect(this.filter.frequency);
+    this.timbreLfo?.connect(this.filter.frequency);
   }
 
   start(): void {
@@ -136,9 +148,9 @@ export class SourceSynth {
     }
     this.mainOsc.start();
     this.subOsc.start();
-    this.airOsc.start();
+    this.airOsc?.start();
     this.lfo.start();
-    this.timbreLfo.start();
+    this.timbreLfo?.start();
     this.envelope.triggerAttack();
     this.active = true;
   }
@@ -158,14 +170,28 @@ export class SourceSynth {
 
   /** Distance-based gain: 0 = silent, 1 = full. Smoothed to avoid clicks. */
   setDistanceGain(gain: number): void {
-    this.distanceGain.gain.rampTo(gain, 0.05);
+    const clamped = Math.max(0, Math.min(1, gain));
+    if (Math.abs(clamped - this.lastDistanceGain) < PERFORMANCE_BUDGET.synth.minGainDelta) {
+      return;
+    }
+    this.distanceGain.gain.rampTo(clamped, 0.05);
+    this.lastDistanceGain = clamped;
   }
 
   /** Source position in player-local frame for Panner3D. */
   setPosition(x: number, y: number, z: number): void {
+    const eps = PERFORMANCE_BUDGET.synth.minPositionDelta;
+    if (
+      Math.abs(x - this.lastPos.x) < eps &&
+      Math.abs(y - this.lastPos.y) < eps &&
+      Math.abs(z - this.lastPos.z) < eps
+    ) {
+      return;
+    }
     this.panner.positionX.value = x;
     this.panner.positionY.value = y;
     this.panner.positionZ.value = z;
+    this.lastPos = { x, y, z };
   }
 
   isActive(): boolean { return this.active; }
@@ -180,6 +206,7 @@ export class SourceSynth {
       this.envelope.triggerRelease();
       this.active = false;
     }
+    this.lastDistanceGain = 0;
     // Small delay to let the gain ramp settle before hard-killing nodes
     setTimeout(() => this.disposeNodes(), 200);
   }
@@ -188,23 +215,23 @@ export class SourceSynth {
     try {
       this.mainOsc.stop();
       this.subOsc.stop();
-      this.airOsc.stop();
+      this.airOsc?.stop();
       this.lfo.stop();
-      this.timbreLfo.stop();
+      this.timbreLfo?.stop();
 
       this.mainOsc.dispose();
       this.subOsc.dispose();
-      this.airOsc.dispose();
+      this.airOsc?.dispose();
       this.mainMix.dispose();
       this.subMix.dispose();
-      this.airMix.dispose();
+      this.airMix?.dispose();
       this.filter.dispose();
       this.envelope.dispose();
       this.ampModGain.dispose();
       this.distanceGain.dispose();
       this.panner.dispose();
       this.lfo.dispose();
-      this.timbreLfo.dispose();
+      this.timbreLfo?.dispose();
     } catch {
       // Already disposed — ignore
     }

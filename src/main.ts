@@ -2,6 +2,7 @@ import { AudioEngine }    from './engine/AudioEngine.ts';
 import { SphereWorld }    from './engine/SphereWorld.ts';
 import { Player }         from './engine/Player.ts';
 import { Autopilot }      from './engine/Autopilot.ts';
+import { PERFORMANCE_BUDGET, PERFORMANCE_TIER } from './engine/PerformanceBudget.ts';
 import { WeatherZoneEngine } from './engine/WeatherZoneEngine.ts';
 import { KeyboardInput }  from './input/KeyboardInput.ts';
 import { Renderer }       from './render/Renderer.ts';
@@ -48,6 +49,18 @@ async function bootstrap(): Promise<void> {
   let transitionInFlight = false;
   let lastSaveWorldElapsed = 0;
   let latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
+  const worldStepSec = 1 / Math.max(1, PERFORMANCE_BUDGET.loop.worldHz);
+  const weatherStepSec = 1 / Math.max(1, PERFORMANCE_BUDGET.loop.weatherHz);
+  const renderStepSec = 1 / Math.max(1, PERFORMANCE_BUDGET.loop.renderHz);
+  let worldAccumulator = worldStepSec;
+  let weatherAccumulator = weatherStepSec;
+  let renderAccumulator = renderStepSec;
+
+  console.info(
+    `[perf] tier=${PERFORMANCE_TIER} worldHz=${PERFORMANCE_BUDGET.loop.worldHz}`
+      + ` weatherHz=${PERFORMANCE_BUDGET.loop.weatherHz}`
+      + ` renderHz=${PERFORMANCE_BUDGET.loop.renderHz}`,
+  );
 
   function worldElapsedSeconds(): number {
     return Math.max(0, (Date.now() - worldEpochMs) / 1000);
@@ -156,29 +169,40 @@ async function bootstrap(): Promise<void> {
     player.update(dt, intent.forward, intent.turn);
 
     const playerState = player.getState();
-    latestWeatherFrame = weather.update(elapsedSecs, playerState.position);
+    worldAccumulator += dt;
+    weatherAccumulator += dt;
+    renderAccumulator += dt;
 
-    // Update world (audio + oscillations)
-    world.update(
-      elapsedSecs,
-      playerState.position,
-      playerState.heading,
-      audio.masterGain,
-      audio.isStarted(),
-    );
-    audio.applyWeatherBlend(latestWeatherFrame.fx);
+    if (worldAccumulator >= worldStepSec) {
+      world.update(
+        elapsedSecs,
+        playerState.position,
+        playerState.heading,
+        audio.masterGain,
+        audio.isStarted(),
+      );
+      worldAccumulator %= worldStepSec;
+    }
 
-    // Render
-    worldView.update(
-      playerState.position,
-      playerState.heading,
-      world.getSources(),
-      latestWeatherFrame.activeZones,
-      renderer.width,
-      renderer.height,
-      elapsedSecs,
-      autopilot.isEnabled(),
-    );
+    if (weatherAccumulator >= weatherStepSec) {
+      latestWeatherFrame = weather.update(elapsedSecs, playerState.position);
+      audio.applyWeatherBlend(latestWeatherFrame.fx);
+      weatherAccumulator %= weatherStepSec;
+    }
+
+    if (renderAccumulator >= renderStepSec) {
+      worldView.update(
+        playerState.position,
+        playerState.heading,
+        world.getSources(),
+        latestWeatherFrame.activeZones,
+        renderer.width,
+        renderer.height,
+        elapsedSecs,
+        autopilot.isEnabled(),
+      );
+      renderAccumulator %= renderStepSec;
+    }
 
     // Save position every 5 seconds
     if (elapsedSecs - lastSaveWorldElapsed >= 5) {

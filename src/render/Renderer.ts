@@ -1,4 +1,5 @@
 import * as PIXI from 'pixi.js';
+import { PERFORMANCE_BUDGET } from '../engine/PerformanceBudget.ts';
 
 export class Renderer {
   readonly app: PIXI.Application;
@@ -12,8 +13,8 @@ export class Renderer {
       preference: 'webgl',
       resizeTo: container,
       backgroundColor: 0x000510,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
+      antialias: PERFORMANCE_BUDGET.renderer.antialias,
+      resolution: Math.min(window.devicePixelRatio || 1, PERFORMANCE_BUDGET.renderer.pixelRatioCap),
       autoDensity: true,
       webgl: {
         powerPreference: 'high-performance',

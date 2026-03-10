@@ -2,19 +2,20 @@ import type { SoundSourceState, SourceVariation, SphericalCoord } from '../types
 import type { Gain } from 'tone';
 import { ARCHETYPES } from '../audio/archetypes.ts';
 import { SoundSource } from './SoundSource.ts';
+import { PERFORMANCE_BUDGET } from './PerformanceBudget.ts';
 import { HEARING_RADIUS } from './sphereMath.ts';
 
-const WORLD_DENSITY_MULTIPLIER = 3;
-const BASE_SOURCE_COUNT = 240 * WORLD_DENSITY_MULTIPLIER;
-const RHYTHMIC_EXTRA_SOURCE_COUNT = 180 * WORLD_DENSITY_MULTIPLIER;
+const WORLD_DENSITY_MULTIPLIER = PERFORMANCE_BUDGET.world.densityMultiplier;
+const BASE_SOURCE_COUNT = Math.max(180, Math.round(240 * WORLD_DENSITY_MULTIPLIER));
+const RHYTHMIC_EXTRA_SOURCE_COUNT = Math.max(120, Math.round(180 * WORLD_DENSITY_MULTIPLIER));
 const SOURCE_COUNT = BASE_SOURCE_COUNT + RHYTHMIC_EXTRA_SOURCE_COUNT;
-const TARGET_MAX_ACTIVE_SOURCES = 12;
-const MIN_MAX_ACTIVE_SOURCES = 8;
+const TARGET_MAX_ACTIVE_SOURCES = PERFORMANCE_BUDGET.world.targetMaxActiveSources;
+const MIN_MAX_ACTIVE_SOURCES = PERFORMANCE_BUDGET.world.minMaxActiveSources;
 const ACTIVE_RELEASE_MARGIN = 2;      // keep audible sources a bit longer to avoid rank thrash
-const MAX_NEW_STARTS_PER_FRAME = 2;   // cap synth allocations per frame to reduce CPU spikes
-const ADAPT_CHECK_INTERVAL = 0.35;    // seconds between cap adjustments
-const ADAPT_DOWN_DT = 1 / 45;         // lower cap if sustained frame time is slower than ~45 FPS
-const ADAPT_UP_DT = 1 / 52;           // raise cap again when stable above ~52 FPS
+const MAX_NEW_STARTS_PER_FRAME = PERFORMANCE_BUDGET.world.maxNewStartsPerFrame;
+const ADAPT_CHECK_INTERVAL = PERFORMANCE_BUDGET.world.adaptCheckIntervalSec;
+const ADAPT_DOWN_DT = PERFORMANCE_BUDGET.world.adaptDownDtSec;
+const ADAPT_UP_DT = PERFORMANCE_BUDGET.world.adaptUpDtSec;
 
 /** Fast deterministic LCG PRNG. Returns values in [0, 1). */
 function makePrng(seed: number): () => number {

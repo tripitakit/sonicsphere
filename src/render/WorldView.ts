@@ -186,6 +186,7 @@ function chordRadiusFromDegrees(arcDegrees: number): number {
 export class WorldView {
   private container: PIXI.Container;
   private sourceGraphics = new Map<string, PIXI.Graphics>();
+  private visibleSourceIds = new Set<string>();
   private archetypePaletteCache = new Map<string, ArchetypePalette>();
   private weatherPaletteCache = new Map<string, WeatherPatchPalette>();
   private playerDot: PIXI.Graphics;
@@ -278,7 +279,8 @@ export class WorldView {
     this.drawPlayerDot(cx, cy, playerHeading, autopilotEnabled);
 
     // Draw each source
-    const visible = new Set<string>();
+    const visible = this.visibleSourceIds;
+    visible.clear();
     for (const source of sources) {
       const dist = chordDistance(playerPos, source.getCurrentPosition());
       if (dist > HEARING_RADIUS * 1.6) continue;
@@ -927,6 +929,7 @@ export class WorldView {
   destroy(): void {
     for (const g of this.sourceGraphics.values()) g.destroy();
     this.sourceGraphics.clear();
+    this.visibleSourceIds.clear();
     this.weatherPaletteCache.clear();
     this.container.destroy();
     this.playerDot.destroy();

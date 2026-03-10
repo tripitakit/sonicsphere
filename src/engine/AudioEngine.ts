@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { WeatherFxBlend } from '../types.ts';
+import { PERFORMANCE_BUDGET } from './PerformanceBudget.ts';
 import { DEFAULT_WEATHER_FX_BLEND } from './WeatherZoneEngine.ts';
 
 function clamp(value: number, min: number, max: number): number {
@@ -37,26 +38,36 @@ const WEATHER_AUDIO_RESPONSE = {
   lfoRampSec: 0.24,
 } as const;
 
+const AUDIO_GUARD_SCALE = PERFORMANCE_BUDGET.tier === 'low'
+  ? 1.8
+  : PERFORMANCE_BUDGET.tier === 'balanced'
+    ? 1.35
+    : 1;
+
+function guardScaled(value: number): number {
+  return value * AUDIO_GUARD_SCALE;
+}
+
 const WEATHER_AUDIO_GUARD = {
   // Avoid scheduling automation every frame when deltas are tiny.
-  minApplyIntervalSec: 1 / 20,
+  minApplyIntervalSec: (1 / 20) * AUDIO_GUARD_SCALE,
   // Ignore micro-deltas that are below perceptual threshold.
   minDelta: {
-    wetLevel: 0.0025,
-    delayTimeSec: 0.006,
-    delayFeedback: 0.0035,
-    delayWet: 0.0035,
-    reverbRoomSize: 0.003,
-    highpassHz: 3,
-    lowpassHz: 24,
-    bandpassMix: 0.004,
-    bandpassQ: 0.03,
-    bandpassSweepHz: 0.03,
-    sweepMinHz: 14,
-    sweepMaxHz: 14,
+    wetLevel: guardScaled(0.0025),
+    delayTimeSec: guardScaled(0.006),
+    delayFeedback: guardScaled(0.0035),
+    delayWet: guardScaled(0.0035),
+    reverbRoomSize: guardScaled(0.003),
+    highpassHz: guardScaled(3),
+    lowpassHz: guardScaled(24),
+    bandpassMix: guardScaled(0.004),
+    bandpassQ: guardScaled(0.03),
+    bandpassSweepHz: guardScaled(0.03),
+    sweepMinHz: guardScaled(14),
+    sweepMaxHz: guardScaled(14),
   },
   // Slew-rate limit on LFO frequency range to avoid abrupt filter jumps.
-  maxSweepStepHzPerApply: 90,
+  maxSweepStepHzPerApply: Math.max(45, 90 / AUDIO_GUARD_SCALE),
 } as const;
 
 export class AudioEngine {
