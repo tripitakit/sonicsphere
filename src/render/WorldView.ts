@@ -72,29 +72,59 @@ type WeatherPatchPalette = {
   ring: number;
 };
 
-const WEATHER_PATCH_PALETTE: Record<WeatherZoneType, WeatherPatchPalette> = {
+type WeatherPatchProfile = {
+  hue: number;
+  hueSpread: number;
+  saturation: number;
+  outerLightness: number;
+  innerLightness: number;
+  coreLightness: number;
+  ringLightness: number;
+};
+
+// Distinct hue families, deliberately far from the audible-zone blue palette.
+const WEATHER_TYPE_COLOR_PROFILE: Record<WeatherZoneType, WeatherPatchProfile> = {
   mist: {
-    // Warm amber family (kept away from audible-zone blues).
-    outer: 0x5b3d1e,
-    inner: 0x8a5f2a,
-    core: 0xc18a3d,
-    ring: 0xe9b966,
+    hue: 34,
+    hueSpread: 16,
+    saturation: 80,
+    outerLightness: 25,
+    innerLightness: 40,
+    coreLightness: 56,
+    ringLightness: 71,
   },
   echo: {
-    // Rosy coral family.
-    outer: 0x5a2233,
-    inner: 0x8a3450,
-    core: 0xc54e76,
-    ring: 0xef8aaa,
+    hue: 341,
+    hueSpread: 18,
+    saturation: 78,
+    outerLightness: 24,
+    innerLightness: 39,
+    coreLightness: 55,
+    ringLightness: 70,
   },
   ion: {
-    // Electric green family.
-    outer: 0x1e5b2a,
-    inner: 0x2e8f41,
-    core: 0x4fc765,
-    ring: 0x8ef0a0,
+    hue: 122,
+    hueSpread: 14,
+    saturation: 76,
+    outerLightness: 23,
+    innerLightness: 38,
+    coreLightness: 54,
+    ringLightness: 69,
   },
 };
+
+const WEATHER_VISUAL_TUNING = {
+  alphaByRole: {
+    strong: 0.34,
+    background: 0.2,
+  },
+  layerAlpha: {
+    outer: 0.4,
+    inner: 0.48,
+    core: 0.54,
+    ring: 0.34,
+  },
+} as const;
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -134,6 +164,15 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
+function clampPercent(v: number): number {
+  return Math.max(0, Math.min(100, v));
+}
+
+function hashJitter(hash: number, bitOffset: number): number {
+  const n = ((hash >>> bitOffset) & 0xff) / 255;
+  return n * 2 - 1;
+}
+
 function inverseWidthForSpeed(speed: number): number {
   const t = clamp01((speed - PLAYER_TRAIL_SPEED_SLOW) / (PLAYER_TRAIL_SPEED_FAST - PLAYER_TRAIL_SPEED_SLOW));
   return PLAYER_TRAIL_WIDTH_AT_SLOW + (PLAYER_TRAIL_WIDTH_AT_FAST - PLAYER_TRAIL_WIDTH_AT_SLOW) * t;
@@ -148,6 +187,7 @@ export class WorldView {
   private container: PIXI.Container;
   private sourceGraphics = new Map<string, PIXI.Graphics>();
   private archetypePaletteCache = new Map<string, ArchetypePalette>();
+  private weatherPaletteCache = new Map<string, WeatherPatchPalette>();
   private playerDot: PIXI.Graphics;
   private topCompass: PIXI.Graphics;
   private worldHorizon: PIXI.Graphics;
@@ -636,25 +676,23 @@ export class WorldView {
 
       const x = cx + projected.x;
       const y = cy + projected.y;
-      const palette = WEATHER_PATCH_PALETTE[zone.type];
-      const roleBoost = zone.role === 'strong' ? 1 : 0.62;
+      const palette = this.getWeatherZonePalette(zone);
       const motion = zone.type === 'ion' ? 1.85 : zone.type === 'echo' ? 0.82 : 0.56;
-      const pulse = 0.94 + 0.06 * Math.sin(elapsed * motion + distFromPlayerPx * 0.004);
-      const baseAlpha = clamp01(zone.influence) * (zone.role === 'strong' ? 0.24 : 0.16);
-      const alpha = baseAlpha * roleBoost;
+      const pulse = 0.92 + 0.08 * Math.sin(elapsed * motion + distFromPlayerPx * 0.004);
+      const baseAlpha = clamp01(zone.influence) * WEATHER_VISUAL_TUNING.alphaByRole[zone.role];
 
       this.weatherZones
         .circle(x, y, outerRadiusPx * pulse)
-        .fill({ color: palette.outer, alpha: alpha * 0.28 });
+        .fill({ color: palette.outer, alpha: baseAlpha * WEATHER_VISUAL_TUNING.layerAlpha.outer });
       this.weatherZones
         .circle(x, y, coreRadiusPx * (0.96 + pulse * 0.04))
-        .fill({ color: palette.inner, alpha: alpha * 0.33 });
+        .fill({ color: palette.inner, alpha: baseAlpha * WEATHER_VISUAL_TUNING.layerAlpha.inner });
       this.weatherZones
         .circle(x, y, coreRadiusPx * 0.58)
-        .fill({ color: palette.core, alpha: alpha * 0.35 });
+        .fill({ color: palette.core, alpha: baseAlpha * WEATHER_VISUAL_TUNING.layerAlpha.core });
       this.weatherZones
         .circle(x, y, coreRadiusPx * (1.02 + 0.02 * pulse))
-        .stroke({ color: palette.ring, alpha: alpha * 0.22, width: 1.1 });
+        .stroke({ color: palette.ring, alpha: baseAlpha * WEATHER_VISUAL_TUNING.layerAlpha.ring, width: 1.1 });
     }
   }
 
@@ -818,6 +856,44 @@ export class WorldView {
       .fill({ color, alpha });
   }
 
+  private getWeatherZonePalette(zone: ActiveWeatherZone): WeatherPatchPalette {
+    const cacheKey = `${zone.id}:${zone.type}`;
+    const cached = this.weatherPaletteCache.get(cacheKey);
+    if (cached) return cached;
+
+    const profile = WEATHER_TYPE_COLOR_PROFILE[zone.type];
+    const hash = hashString(cacheKey);
+    const hue = profile.hue + hashJitter(hash, 0) * profile.hueSpread;
+    const sat = clampPercent(profile.saturation + hashJitter(hash, 8) * 8);
+    const lightShift = hashJitter(hash, 16) * 4;
+
+    const palette: WeatherPatchPalette = {
+      outer: hslToHex(
+        hue - 6,
+        clampPercent(sat - 6),
+        clampPercent(profile.outerLightness + lightShift * 0.7),
+      ),
+      inner: hslToHex(
+        hue - 1,
+        sat,
+        clampPercent(profile.innerLightness + lightShift),
+      ),
+      core: hslToHex(
+        hue + 4,
+        clampPercent(sat + 6),
+        clampPercent(profile.coreLightness + lightShift * 1.1),
+      ),
+      ring: hslToHex(
+        hue + 10 + hashJitter(hash, 24) * 4,
+        clampPercent(sat + 8),
+        clampPercent(profile.ringLightness + lightShift * 1.2),
+      ),
+    };
+
+    this.weatherPaletteCache.set(cacheKey, palette);
+    return palette;
+  }
+
   private getArchetypePalette(archetypeName: string): ArchetypePalette {
     const cached = this.archetypePaletteCache.get(archetypeName);
     if (cached) return cached;
@@ -851,6 +927,7 @@ export class WorldView {
   destroy(): void {
     for (const g of this.sourceGraphics.values()) g.destroy();
     this.sourceGraphics.clear();
+    this.weatherPaletteCache.clear();
     this.container.destroy();
     this.playerDot.destroy();
     this.topCompass.destroy();

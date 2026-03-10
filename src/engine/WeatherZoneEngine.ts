@@ -21,7 +21,7 @@ const EPS = 1e-6;
  * Keep edits here for rapid listening tests.
  */
 export const WEATHER_EFFECT_TUNING = {
-  profileName: 'experimental-v1',
+  profileName: 'experimental-v2-zonal-space',
   // >1 pushes blend faster toward zone character; 1 = neutral.
   globalBlendAmount: 1.22,
   // Relative contribution of zone roles.
@@ -33,6 +33,37 @@ export const WEATHER_EFFECT_TUNING = {
     echo: 1.14,
     ion: 1.28,
   } satisfies Record<WeatherZoneType, number>,
+  // Emphasize spatial FX differences between weather families.
+  // Keep this block as the primary knob-set for "more/less obvious" contrasts.
+  zoneTypeFxBias: {
+    mist: {
+      wetLevel: 1.12,
+      delayTimeSec: 0.9,
+      delayFeedback: 0.94,
+      delayWet: 0.9,
+      reverbRoomSize: 1.28,
+    },
+    echo: {
+      wetLevel: 1.22,
+      delayTimeSec: 1.16,
+      delayFeedback: 1.36,
+      delayWet: 1.34,
+      reverbRoomSize: 1.18,
+    },
+    ion: {
+      wetLevel: 0.9,
+      delayTimeSec: 0.88,
+      delayFeedback: 0.8,
+      delayWet: 0.76,
+      reverbRoomSize: 0.82,
+    },
+  } satisfies Record<WeatherZoneType, {
+    wetLevel: number;
+    delayTimeSec: number;
+    delayFeedback: number;
+    delayWet: number;
+    reverbRoomSize: number;
+  }>,
   // Per-parameter multipliers after weighted blend.
   fxMultiplier: {
     wetLevel: 1.28,
@@ -43,9 +74,34 @@ export const WEATHER_EFFECT_TUNING = {
     bandpassQ: 1.16,
     bandpassSweepHz: 1.12,
   },
+  // Keep delay-time more stable across moving weather boundaries.
+  delayQuantization: {
+    enabled: true,
+    stepSec: 0.04,
+    blend: 0.9,
+    minHoldSec: 1.15,
+    switchThresholdSec: 0.03,
+  },
   // Temporal smoothing to avoid zipper noise and abrupt spectral jumps.
-  fxSmoothingAlphaActive: 0.22,
-  fxSmoothingAlphaIdle: 0.12,
+  // Keep delay/sweep-range slower than the rest to reduce clicks.
+  fxSmoothing: {
+    active: {
+      default: 0.14,
+      delayTimeSec: 0.06,
+      delayFeedback: 0.1,
+      delayWet: 0.1,
+      bandpassSweepHz: 0.08,
+      bandpassSweepRange: 0.05,
+    },
+    idle: {
+      default: 0.08,
+      delayTimeSec: 0.035,
+      delayFeedback: 0.06,
+      delayWet: 0.06,
+      bandpassSweepHz: 0.05,
+      bandpassSweepRange: 0.03,
+    },
+  },
 } as const;
 
 interface WeatherPresetVariant {
@@ -356,6 +412,8 @@ function applyExperimentalTuning(blend: WeatherFxBlend): WeatherFxBlend {
 export class WeatherZoneEngine {
   private zones: WeatherZoneModel[];
   private smoothedFx: WeatherFxBlend = { ...DEFAULT_WEATHER_FX_BLEND };
+  private quantizedDelayTimeSec = DEFAULT_WEATHER_FX_BLEND.delayTimeSec;
+  private quantizedDelayLastSwitchSec = Number.NEGATIVE_INFINITY;
 
   constructor(seed = 0x5f3759df, zoneCount = DEFAULT_ZONE_COUNT) {
     this.zones = this.generateZones(seed, zoneCount);
@@ -493,6 +551,7 @@ export class WeatherZoneEngine {
 
     for (const zone of selected) {
       const preset = presetForZone(zone.model);
+      const typeFx = WEATHER_EFFECT_TUNING.zoneTypeFxBias[zone.model.type];
       const roleWeight = zone.role === 'background'
         ? WEATHER_EFFECT_TUNING.roleWeightBackground
         : WEATHER_EFFECT_TUNING.roleWeightStrong;
@@ -505,11 +564,11 @@ export class WeatherZoneEngine {
       ) * preset.delayOrganicDepthSec;
 
       totalWeight += weight;
-      wetLevel += preset.wetLevel * weight;
-      delayTimeSec += organicDelay * weight;
-      delayFeedback += preset.delayFeedback * weight;
-      delayWet += preset.delayWet * weight;
-      reverbRoomSize += preset.reverbRoomSize * weight;
+      wetLevel += preset.wetLevel * typeFx.wetLevel * weight;
+      delayTimeSec += organicDelay * typeFx.delayTimeSec * weight;
+      delayFeedback += preset.delayFeedback * typeFx.delayFeedback * weight;
+      delayWet += preset.delayWet * typeFx.delayWet * weight;
+      reverbRoomSize += preset.reverbRoomSize * typeFx.reverbRoomSize * weight;
       highpassHz += preset.highpassHz * weight;
       lowpassHz += preset.lowpassHz * weight;
       bandpassMix += preset.bandpassMix * weight;
@@ -523,10 +582,12 @@ export class WeatherZoneEngine {
 
     const invWeight = 1 / totalWeight;
     const activity = clamp01((totalWeight / 1.15) * WEATHER_EFFECT_TUNING.globalBlendAmount);
+    const rawDelayTimeSec = delayTimeSec * invWeight;
+    const stabilizedDelayTimeSec = this.stabilizeDelayTime(rawDelayTimeSec, activity, elapsedSeconds);
 
     const blend: WeatherFxBlend = {
       wetLevel: lerp(DEFAULT_WEATHER_FX_BLEND.wetLevel, wetLevel * invWeight, activity),
-      delayTimeSec: lerp(DEFAULT_WEATHER_FX_BLEND.delayTimeSec, delayTimeSec * invWeight, activity),
+      delayTimeSec: lerp(DEFAULT_WEATHER_FX_BLEND.delayTimeSec, stabilizedDelayTimeSec, activity),
       delayFeedback: lerp(DEFAULT_WEATHER_FX_BLEND.delayFeedback, delayFeedback * invWeight, activity),
       delayWet: lerp(DEFAULT_WEATHER_FX_BLEND.delayWet, delayWet * invWeight, activity),
       reverbRoomSize: lerp(DEFAULT_WEATHER_FX_BLEND.reverbRoomSize, reverbRoomSize * invWeight, activity),
@@ -550,25 +611,50 @@ export class WeatherZoneEngine {
     return clampBlend(applyExperimentalTuning(blend));
   }
 
+  private stabilizeDelayTime(rawDelayTimeSec: number, activity: number, elapsedSeconds: number): number {
+    const q = WEATHER_EFFECT_TUNING.delayQuantization;
+    if (!q.enabled || q.stepSec <= EPS) return rawDelayTimeSec;
+
+    const quantizedCandidate = clamp(
+      Math.round(rawDelayTimeSec / q.stepSec) * q.stepSec,
+      0.1,
+      0.82,
+    );
+    const switchDelta = Math.abs(quantizedCandidate - this.quantizedDelayTimeSec);
+    const holdElapsed = elapsedSeconds - this.quantizedDelayLastSwitchSec;
+    if (switchDelta >= q.switchThresholdSec && holdElapsed >= q.minHoldSec) {
+      this.quantizedDelayTimeSec = quantizedCandidate;
+      this.quantizedDelayLastSwitchSec = elapsedSeconds;
+    }
+
+    const quantizeMix = clamp01(q.blend * activity);
+    return lerp(rawDelayTimeSec, this.quantizedDelayTimeSec, quantizeMix);
+  }
+
   private smoothFx(target: WeatherFxBlend, hasActiveZones: boolean): WeatherFxBlend {
-    const alpha = hasActiveZones
-      ? WEATHER_EFFECT_TUNING.fxSmoothingAlphaActive
-      : WEATHER_EFFECT_TUNING.fxSmoothingAlphaIdle;
-    const t = clamp01(alpha);
+    const profile = hasActiveZones
+      ? WEATHER_EFFECT_TUNING.fxSmoothing.active
+      : WEATHER_EFFECT_TUNING.fxSmoothing.idle;
+    const tBase = clamp01(profile.default);
+    const tDelayTime = clamp01(profile.delayTimeSec);
+    const tDelayFeedback = clamp01(profile.delayFeedback);
+    const tDelayWet = clamp01(profile.delayWet);
+    const tSweepRate = clamp01(profile.bandpassSweepHz);
+    const tSweepRange = clamp01(profile.bandpassSweepRange);
 
     this.smoothedFx = clampBlend({
-      wetLevel: lerp(this.smoothedFx.wetLevel, target.wetLevel, t),
-      delayTimeSec: lerp(this.smoothedFx.delayTimeSec, target.delayTimeSec, t),
-      delayFeedback: lerp(this.smoothedFx.delayFeedback, target.delayFeedback, t),
-      delayWet: lerp(this.smoothedFx.delayWet, target.delayWet, t),
-      reverbRoomSize: lerp(this.smoothedFx.reverbRoomSize, target.reverbRoomSize, t),
-      highpassHz: lerp(this.smoothedFx.highpassHz, target.highpassHz, t),
-      lowpassHz: lerp(this.smoothedFx.lowpassHz, target.lowpassHz, t),
-      bandpassMix: lerp(this.smoothedFx.bandpassMix, target.bandpassMix, t),
-      bandpassQ: lerp(this.smoothedFx.bandpassQ, target.bandpassQ, t),
-      bandpassSweepHz: lerp(this.smoothedFx.bandpassSweepHz, target.bandpassSweepHz, t),
-      bandpassSweepMinHz: lerp(this.smoothedFx.bandpassSweepMinHz, target.bandpassSweepMinHz, t),
-      bandpassSweepMaxHz: lerp(this.smoothedFx.bandpassSweepMaxHz, target.bandpassSweepMaxHz, t),
+      wetLevel: lerp(this.smoothedFx.wetLevel, target.wetLevel, tBase),
+      delayTimeSec: lerp(this.smoothedFx.delayTimeSec, target.delayTimeSec, tDelayTime),
+      delayFeedback: lerp(this.smoothedFx.delayFeedback, target.delayFeedback, tDelayFeedback),
+      delayWet: lerp(this.smoothedFx.delayWet, target.delayWet, tDelayWet),
+      reverbRoomSize: lerp(this.smoothedFx.reverbRoomSize, target.reverbRoomSize, tBase),
+      highpassHz: lerp(this.smoothedFx.highpassHz, target.highpassHz, tBase),
+      lowpassHz: lerp(this.smoothedFx.lowpassHz, target.lowpassHz, tBase),
+      bandpassMix: lerp(this.smoothedFx.bandpassMix, target.bandpassMix, tBase),
+      bandpassQ: lerp(this.smoothedFx.bandpassQ, target.bandpassQ, tBase),
+      bandpassSweepHz: lerp(this.smoothedFx.bandpassSweepHz, target.bandpassSweepHz, tSweepRate),
+      bandpassSweepMinHz: lerp(this.smoothedFx.bandpassSweepMinHz, target.bandpassSweepMinHz, tSweepRange),
+      bandpassSweepMaxHz: lerp(this.smoothedFx.bandpassSweepMaxHz, target.bandpassSweepMaxHz, tSweepRange),
     });
 
     return this.smoothedFx;

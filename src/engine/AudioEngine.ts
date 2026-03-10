@@ -31,36 +31,32 @@ const WEATHER_AUDIO_LIMITS = {
 
 const WEATHER_AUDIO_RESPONSE = {
   dryAttenuationByWet: 0.82,
-  mainRampSec: 0.22,
-  lfoRampSec: 0.18,
+  mainRampSec: 0.26,
+  delayRampSec: 0.52,
+  reverbRampSec: 0.4,
+  lfoRampSec: 0.24,
 } as const;
 
 const WEATHER_AUDIO_GUARD = {
   // Avoid scheduling automation every frame when deltas are tiny.
-  minApplyIntervalSec: 1 / 36,
-  // Force immediate updates when changes are significant.
-  largeDelta: {
-    wetLevel: 0.035,
-    delayFeedback: 0.045,
-    bandpassMix: 0.06,
-  },
+  minApplyIntervalSec: 1 / 20,
   // Ignore micro-deltas that are below perceptual threshold.
   minDelta: {
-    wetLevel: 0.0018,
-    delayTimeSec: 0.0025,
-    delayFeedback: 0.002,
-    delayWet: 0.002,
-    reverbRoomSize: 0.002,
-    highpassHz: 2,
-    lowpassHz: 16,
-    bandpassMix: 0.003,
-    bandpassQ: 0.02,
-    bandpassSweepHz: 0.02,
-    sweepMinHz: 8,
-    sweepMaxHz: 8,
+    wetLevel: 0.0025,
+    delayTimeSec: 0.006,
+    delayFeedback: 0.0035,
+    delayWet: 0.0035,
+    reverbRoomSize: 0.003,
+    highpassHz: 3,
+    lowpassHz: 24,
+    bandpassMix: 0.004,
+    bandpassQ: 0.03,
+    bandpassSweepHz: 0.03,
+    sweepMinHz: 14,
+    sweepMaxHz: 14,
   },
   // Slew-rate limit on LFO frequency range to avoid abrupt filter jumps.
-  maxSweepStepHzPerApply: 180,
+  maxSweepStepHzPerApply: 90,
 } as const;
 
 export class AudioEngine {
@@ -255,6 +251,7 @@ export class AudioEngine {
     this.currentSweepMaxHz = nextSweepMax;
 
     const ramp = WEATHER_AUDIO_RESPONSE.mainRampSec;
+    const delayRamp = WEATHER_AUDIO_RESPONSE.delayRampSec;
 
     this.dryGain.gain.rampTo(dryLevel, ramp);
     this.wetGain.gain.rampTo(wetLevel, ramp);
@@ -262,10 +259,10 @@ export class AudioEngine {
     this.highpass.frequency.rampTo(target.highpassHz, ramp);
     this.lowpass.frequency.rampTo(target.lowpassHz, ramp);
 
-    this.delay.delayTime.rampTo(target.delayTimeSec, ramp);
-    this.delay.feedback.rampTo(target.delayFeedback, ramp);
-    this.delay.wet.rampTo(target.delayWet, ramp);
-    this.reverb.roomSize.rampTo(target.reverbRoomSize, ramp * 1.3);
+    this.delay.delayTime.rampTo(target.delayTimeSec, delayRamp);
+    this.delay.feedback.rampTo(target.delayFeedback, delayRamp);
+    this.delay.wet.rampTo(target.delayWet, delayRamp);
+    this.reverb.roomSize.rampTo(target.reverbRoomSize, WEATHER_AUDIO_RESPONSE.reverbRampSec);
 
     this.bandpassDryGain.gain.rampTo(1 - bandpassMix, ramp);
     this.bandpassWetGain.gain.rampTo(bandpassMix, ramp);
@@ -299,12 +296,6 @@ export class AudioEngine {
     const deltaSweepMin = Math.abs(next.bandpassSweepMinHz - prev.bandpassSweepMinHz);
     const deltaSweepMax = Math.abs(next.bandpassSweepMaxHz - prev.bandpassSweepMaxHz);
 
-    const largeDelta =
-      deltaWet >= WEATHER_AUDIO_GUARD.largeDelta.wetLevel ||
-      deltaDelayFeedback >= WEATHER_AUDIO_GUARD.largeDelta.delayFeedback ||
-      deltaBandpassMix >= WEATHER_AUDIO_GUARD.largeDelta.bandpassMix;
-
-    if (largeDelta) return true;
     if ((now - this.lastBlendApplyAt) < WEATHER_AUDIO_GUARD.minApplyIntervalSec) return false;
 
     return (
