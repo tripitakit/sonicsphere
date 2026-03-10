@@ -20,9 +20,11 @@ export class Renderer {
       },
     });
 
-    const rendererName = this.app.renderer.constructor.name.toLowerCase();
-    if (!rendererName.includes('webgl')) {
-      throw new Error(`WebGL renderer required, got ${rendererName || 'unknown renderer'}`);
+    // Check for WebGL context - works even with minified class names
+    const renderer = this.app.renderer as any;
+    const hasWebGL = renderer.gl || renderer.context?.gl || renderer.type === 1;
+    if (!hasWebGL) {
+      throw new Error('WebGL renderer required but not available');
     }
 
     container.appendChild(this.app.canvas);

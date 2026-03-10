@@ -25,5 +25,8 @@ Thumbs.db
 *.swp
 *~
 
+
+sonicsphere.nginx.conf
+
 # Local tooling/workspace metadata
 .claude/
