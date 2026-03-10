@@ -8,7 +8,7 @@ import { KeyboardInput }  from './input/KeyboardInput.ts';
 import { Renderer }       from './render/Renderer.ts';
 import { WorldView }      from './render/WorldView.ts';
 import { loadState, saveState } from './persistence/Storage.ts';
-import type { PlayerState, WeatherFxBlend } from './types.ts';
+import type { PlayerState, SoundEngineType, WeatherFxBlend } from './types.ts';
 
 function randomInitialPlayerState(): PlayerState {
   // Uniform sample on sphere surface for latitude + independent longitude.
@@ -33,6 +33,7 @@ type PerformanceHud = {
   weather: HTMLSpanElement;
   weatherBar: HTMLSpanElement;
   effects: HTMLDivElement;
+  engines: HTMLDivElement;
 };
 
 function getPerformanceHud(): PerformanceHud | null {
@@ -45,10 +46,11 @@ function getPerformanceHud(): PerformanceHud | null {
   const weather = document.getElementById('perf-weather') as HTMLSpanElement | null;
   const weatherBar = document.getElementById('perf-weather-bar') as HTMLSpanElement | null;
   const effects = document.getElementById('perf-effects') as HTMLDivElement | null;
-  if (!tier || !fps || !risk || !riskBar || !voices || !voicesBar || !weather || !weatherBar || !effects) {
+  const engines = document.getElementById('perf-engines') as HTMLDivElement | null;
+  if (!tier || !fps || !risk || !riskBar || !voices || !voicesBar || !weather || !weatherBar || !effects || !engines) {
     return null;
   }
-  return { tier, fps, risk, riskBar, voices, voicesBar, weather, weatherBar, effects };
+  return { tier, fps, risk, riskBar, voices, voicesBar, weather, weatherBar, effects, engines };
 }
 
 function weatherFxLoad(fx: WeatherFxBlend): number {
@@ -78,6 +80,16 @@ type GlitchRisk = {
   background: string;
   text: string;
 };
+
+function formatEngineBreakdown(
+  breakdown: Record<SoundEngineType, number>,
+  totalActiveVoices: number,
+): string {
+  if (totalActiveVoices <= 0) return 'eng s:0 n:0 f:0 r:0';
+  const pct = (v: number): number => Math.round((v / totalActiveVoices) * 100);
+  return `eng s:${pct(breakdown.subtractive)} n:${pct(breakdown.noise)} `
+    + `f:${pct(breakdown.fm)} r:${pct(breakdown.resonator)}`;
+}
 
 type GlitchRiskThresholds = {
   med: number;
@@ -277,6 +289,7 @@ async function bootstrap(): Promise<void> {
     const glitchRisk = computeGlitchRisk(fps, voicePressure, fxLoad);
     const zones = latestWeatherFrame.activeZones;
     const zoneTypeTags = Array.from(new Set(zones.map((z) => z.type)));
+    const engineBreakdown = world.getActiveVoiceBreakdown();
 
     perfHud.tier.textContent = `${PERFORMANCE_TIER} profile`;
     perfHud.fps.textContent = `${Math.round(fps)} fps`;
@@ -302,6 +315,7 @@ async function bootstrap(): Promise<void> {
       + `r:${Math.round(fx.reverbRoomSize * 100)}% | `
       + `s:${Math.round(fx.bandpassMix * 100)}% | `
       + `start:${voiceStartCap} pool:${world.getTotalSourceCount()}`;
+    perfHud.engines.textContent = formatEngineBreakdown(engineBreakdown, activeVoices);
   }
 
   function tick(now: number): void {

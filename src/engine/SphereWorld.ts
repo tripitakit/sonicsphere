@@ -32,10 +32,10 @@ const BASE_ENGINE_WEIGHTS: Record<SoundEngineType, number> = {
   resonator: 0.15,
 };
 const RHYTHMIC_ENGINE_WEIGHTS: Record<SoundEngineType, number> = {
-  subtractive: 0.6,
-  noise: 0,
-  fm: 0.2,
-  resonator: 0.2,
+  subtractive: 0.5,
+  noise: 0.15,
+  fm: 0.175,
+  resonator: 0.175,
 };
 
 function engineOf(archetype: SoundArchetype): SoundEngineType {
@@ -57,6 +57,12 @@ export class SphereWorld {
   private sortBuf: Array<{ idx: number; dist: number }>;
   private adaptiveMaxActiveSources = TARGET_MAX_ACTIVE_SOURCES;
   private activeVoiceCount = 0;
+  private activeVoiceByEngine: Record<SoundEngineType, number> = {
+    subtractive: 0,
+    noise: 0,
+    fm: 0,
+    resonator: 0,
+  };
   private frameDtEma = 1 / 60;
   private lastUpdateElapsed: number | null = null;
   private lastAdaptAt = 0;
@@ -238,6 +244,12 @@ export class SphereWorld {
 
     let startsThisFrame = 0;
     let activeVoices = 0;
+    const activeByEngine: Record<SoundEngineType, number> = {
+      subtractive: 0,
+      noise: 0,
+      fm: 0,
+      resonator: 0,
+    };
 
     for (let i = 0; i < this.sources.length; i++) {
       const entry = this.sortBuf[i]!;
@@ -279,10 +291,12 @@ export class SphereWorld {
       }
       if (source.isAudible()) {
         activeVoices++;
+        activeByEngine[source.getEngineType()]++;
       }
     }
 
     this.activeVoiceCount = activeVoices;
+    this.activeVoiceByEngine = activeByEngine;
   }
 
   getSources(): readonly SoundSource[] {
@@ -309,13 +323,34 @@ export class SphereWorld {
     return this.sources.length;
   }
 
+  getActiveVoiceBreakdown(): Record<SoundEngineType, number> {
+    return {
+      subtractive: this.activeVoiceByEngine.subtractive,
+      noise: this.activeVoiceByEngine.noise,
+      fm: this.activeVoiceByEngine.fm,
+      resonator: this.activeVoiceByEngine.resonator,
+    };
+  }
+
   suspendAllVoices(): void {
     for (const source of this.sources) source.forceStop();
     this.activeVoiceCount = 0;
+    this.activeVoiceByEngine = {
+      subtractive: 0,
+      noise: 0,
+      fm: 0,
+      resonator: 0,
+    };
   }
 
   dispose(): void {
     for (const source of this.sources) source.dispose();
     this.activeVoiceCount = 0;
+    this.activeVoiceByEngine = {
+      subtractive: 0,
+      noise: 0,
+      fm: 0,
+      resonator: 0,
+    };
   }
 }

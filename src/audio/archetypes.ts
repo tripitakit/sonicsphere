@@ -1082,6 +1082,52 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 960, Q: 1.5 },
   },
 
+  // ── RHYTHMIC NOISE BURSTS (4 VARIANTS) ───────────────────────────────────
+  {
+    name: 'noise-rhythm-a',
+    mode: 'rhythmic',
+    engine: 'noise',
+    noiseColor: 'white',
+    frequency: 860,
+    waveform: 'triangle',
+    attack: 0.006, decay: 0.1, sustain: 0.08, release: 0.18,
+    lfoRate: 9.2, lfoDepth: 122, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 1050, Q: 1.4 },
+  },
+  {
+    name: 'noise-rhythm-b',
+    mode: 'rhythmic',
+    engine: 'noise',
+    noiseColor: 'pink',
+    frequency: 620,
+    waveform: 'square',
+    attack: 0.008, decay: 0.16, sustain: 0.12, release: 0.24,
+    lfoRate: 6.8, lfoDepth: 110, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 780, Q: 4.2 },
+  },
+  {
+    name: 'noise-rhythm-c',
+    mode: 'rhythmic',
+    engine: 'noise',
+    noiseColor: 'brown',
+    frequency: 420,
+    waveform: 'sawtooth',
+    attack: 0.01, decay: 0.22, sustain: 0.14, release: 0.3,
+    lfoRate: 4.9, lfoDepth: 102, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 520, Q: 3.5 },
+  },
+  {
+    name: 'noise-rhythm-d',
+    mode: 'rhythmic',
+    engine: 'noise',
+    noiseColor: 'white',
+    frequency: 1180,
+    waveform: 'sine',
+    attack: 0.004, decay: 0.08, sustain: 0.05, release: 0.14,
+    lfoRate: 11.6, lfoDepth: 130, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1440, Q: 5.8 },
+  },
+
   // ── FM INHARMONIC TONES (4 VARIANTS) ─────────────────────────────────────
   {
     name: 'bronze-bell-orbit',
