@@ -21,112 +21,6 @@
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
     #canvas-container { width: 100%; height: 100%; }
 
-    #performance-hud {
-      position: fixed;
-      top: 14px;
-      left: 14px;
-      width: min(252px, calc(100vw - 22px));
-      padding: 7px 8px 8px;
-      border-radius: 12px;
-      border: 1px solid rgba(93, 147, 178, 0.24);
-      background:
-        radial-gradient(160% 140% at 0% 0%, rgba(28, 93, 130, 0.2), transparent 62%),
-        linear-gradient(168deg, rgba(4, 15, 27, 0.76), rgba(3, 12, 23, 0.68));
-      box-shadow:
-        0 0 0 1px rgba(40, 83, 111, 0.18) inset,
-        0 6px 18px rgba(0, 0, 0, 0.22);
-      backdrop-filter: blur(3px) saturate(118%);
-      color: rgba(220, 241, 255, 0.9);
-      pointer-events: none;
-      z-index: 6;
-      font-family: 'Space Mono', 'IBM Plex Mono', 'Menlo', monospace;
-      opacity: 0.9;
-    }
-
-    #performance-hud .hud-head,
-    #performance-hud .hud-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    #performance-hud .hud-head {
-      font-size: 9px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: rgba(162, 207, 232, 0.82);
-      margin-bottom: 5px;
-    }
-
-    #performance-hud .hud-row {
-      margin-top: 3px;
-      font-size: 9.5px;
-      letter-spacing: 0.02em;
-      color: rgba(183, 220, 242, 0.82);
-    }
-
-    #performance-hud .hud-value {
-      color: rgba(239, 248, 255, 0.94);
-    }
-
-    #performance-hud .hud-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 48px;
-      padding: 1px 7px;
-      border-radius: 999px;
-      border: 1px solid rgba(111, 161, 191, 0.42);
-      background: rgba(29, 72, 98, 0.3);
-      color: #e8f7ff;
-      font-size: 8.5px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    #performance-hud .hud-bar {
-      margin-top: 3px;
-      width: 100%;
-      height: 4px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: rgba(56, 94, 121, 0.28);
-      box-shadow: 0 0 0 1px rgba(57, 99, 128, 0.2) inset;
-    }
-
-    #performance-hud .hud-bar > span {
-      display: block;
-      width: 0%;
-      height: 100%;
-      border-radius: inherit;
-      transition: width 140ms linear, background-color 160ms ease;
-      background: #78d8ba;
-    }
-
-    #perf-effects {
-      margin-top: 6px;
-      font-size: 8.5px;
-      line-height: 1.35;
-      letter-spacing: 0.02em;
-      color: rgba(151, 193, 218, 0.78);
-      min-height: 12px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #perf-engines {
-      margin-top: 2px;
-      font-size: 8.5px;
-      line-height: 1.3;
-      letter-spacing: 0.03em;
-      color: rgba(132, 179, 207, 0.74);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
     #start-overlay {
       position: fixed;
       inset: 0;
@@ -281,12 +175,6 @@
     }
 
     @media (max-width: 640px) {
-      #performance-hud {
-        width: min(228px, calc(100vw - 18px));
-        top: 9px;
-        left: 9px;
-      }
-
       .overlay-panel {
         width: min(92vw, 640px);
       }
@@ -311,29 +199,6 @@
       <span class="hint overlay-headphones">headphones recommended</span>
       <span class="overlay-footnote">explore by listening</span>
     </div>
-  </div>
-  <div id="performance-hud" aria-live="off">
-    <div class="hud-head">
-      <span id="perf-tier">perf</span>
-      <span id="perf-fps">-- fps</span>
-    </div>
-    <div class="hud-row">
-      <span>Glitch Risk</span>
-      <span class="hud-pill" id="perf-risk">low</span>
-    </div>
-    <div class="hud-bar"><span id="perf-risk-bar"></span></div>
-    <div class="hud-row">
-      <span>Voices</span>
-      <span class="hud-value" id="perf-voices">0/0</span>
-    </div>
-    <div class="hud-bar"><span id="perf-voices-bar"></span></div>
-    <div class="hud-row">
-      <span>Weather FX</span>
-      <span class="hud-value" id="perf-weather">0%</span>
-    </div>
-    <div class="hud-bar"><span id="perf-weather-bar"></span></div>
-    <div id="perf-effects">zones: --</div>
-    <div id="perf-engines">eng: --</div>
   </div>
   <div id="canvas-container"></div>
   <script type="module" src="/src/main.ts"></script>

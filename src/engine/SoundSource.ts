@@ -1,4 +1,4 @@
-import type { SoundEngineType, SoundSourceState, SphericalCoord } from '../types.ts';
+import type { SoundSourceState, SphericalCoord } from '../types.ts';
 import type { Gain } from 'tone';
 import { SourceSynth } from '../audio/SourceSynth.ts';
 import {
@@ -68,7 +68,6 @@ export class SoundSource {
   getEquilibrium(): SphericalCoord     { return this.state.equilibrium; }
   getId(): string                       { return this.state.id; }
   getArchetypeName(): string            { return this.state.archetype.name; }
-  getEngineType(): SoundEngineType      { return this.state.archetype.engine ?? 'subtractive'; }
   isAudible(): boolean                  { return this.inRange; }
 
   getDistanceFrom(pos: SphericalCoord): number {
