@@ -14,8 +14,8 @@ import { bearingDeg, chordDistance } from './sphereMath.ts';
 const NAV_FORWARD_SPEED = 0.55;
 
 // Chord-distance (world units) at which we consider the destination reached.
-// Small enough that the player visually lands on the clicked point.
-const NAV_ARRIVAL_CHORD = 5;
+// Near-zero so the player center lands exactly on the marker.
+const NAV_ARRIVAL_CHORD = 1.5;
 
 // Start a gentle deceleration below this chord distance
 const NAV_SLOW_CHORD = 40;
@@ -77,11 +77,11 @@ export class ClickNavigator {
 
     const turn = clamp(headingError * NAV_TURN_GAIN, -1, 1);
 
-    // Forward: ease to 30% in the last NAV_SLOW_CHORD units; always make progress
+    // Forward: decelerate linearly to near-zero as the player closes in
     const alignmentFactor = Math.max(0.1, Math.cos(headingError * DEG));
     const distFactor      = dist > NAV_SLOW_CHORD
       ? 1.0
-      : 0.3 + 0.7 * (dist / NAV_SLOW_CHORD);
+      : clamp(dist / NAV_SLOW_CHORD, 0.04, 1.0);
     const forward = NAV_FORWARD_SPEED * alignmentFactor * distFactor * speedMult;
 
     return { forward, turn };

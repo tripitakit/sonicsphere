@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 import type { WeatherFxBlend } from '../types.ts';
 import { PERFORMANCE_BUDGET } from './PerformanceBudget.ts';
 import {
-  ACTIVE_WEATHER_FX_PROFILE,
+  getWeatherFxProfile,
   DEFAULT_WEATHER_FX_BLEND,
   type WeatherFxProfileName,
 } from './WeatherZoneEngine.ts';
@@ -122,7 +122,7 @@ const WEATHER_AUDIO_PROFILES: Record<WeatherFxProfileName, WeatherAudioProfile> 
   },
 };
 
-const WEATHER_AUDIO_PROFILE = WEATHER_AUDIO_PROFILES[ACTIVE_WEATHER_FX_PROFILE];
+const WEATHER_AUDIO_PROFILE = WEATHER_AUDIO_PROFILES[getWeatherFxProfile()];
 const WEATHER_AUDIO_LIMITS = WEATHER_AUDIO_PROFILE.limits;
 const WEATHER_AUDIO_RESPONSE = WEATHER_AUDIO_PROFILE.response;
 

@@ -3,7 +3,7 @@ import { SphereWorld }    from './engine/SphereWorld.ts';
 import { Player }         from './engine/Player.ts';
 import { Autopilot }      from './engine/Autopilot.ts';
 import { PERFORMANCE_BUDGET, PERFORMANCE_TIER } from './engine/PerformanceBudget.ts';
-import { WeatherZoneEngine } from './engine/WeatherZoneEngine.ts';
+import { WeatherZoneEngine, setWeatherFxProfile, WEATHER_FX_PROFILE_NAMES } from './engine/WeatherZoneEngine.ts';
 import { KeyboardInput }  from './input/KeyboardInput.ts';
 import { ClickNavigator } from './engine/ClickNavigator.ts';
 import { Renderer }       from './render/Renderer.ts';
@@ -54,11 +54,20 @@ async function bootstrap(): Promise<void> {
   // pointerdown handler can skip the event and not plant a nav target.
   let pixiBtnConsumed = false;
 
+  // Weather FX preset: 0=subtle, 1=experimental, 2=extreme (matches WEATHER_FX_PROFILE_NAMES order)
+  let weatherProfileIdx = 1; // default: experimental
+
   const worldView = new WorldView(
     renderer.stage,
     () => { pixiBtnConsumed = true; if (!paused) autopilot.toggle(); },
     () => { pixiBtnConsumed = true; speedStepIdx = Math.max(0, speedStepIdx - 1); },
     () => { pixiBtnConsumed = true; speedStepIdx = Math.min(SPEED_STEPS.length - 1, speedStepIdx + 1); },
+    (idx: number) => {
+      pixiBtnConsumed = true;
+      weatherProfileIdx = idx;
+      const name = WEATHER_FX_PROFILE_NAMES[idx];
+      if (name) setWeatherFxProfile(name);
+    },
   );
 
   let paused = true;
@@ -250,6 +259,7 @@ async function bootstrap(): Promise<void> {
         autopilot.isEnabled(),
         clickNav.getTarget(),
         speedMult,
+        weatherProfileIdx,
       );
       renderAccumulator %= renderStepSec;
     }

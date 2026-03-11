@@ -1,160 +1,160 @@
-# Sonic Sphere - Documentazione Tecnica (Aggiornata)
+# Sonic Sphere - Technical Documentation (Updated)
 
-**Ultimo aggiornamento:** 10 marzo 2026  
-**Stato:** Prototipo avanzato, playable, in tuning continuo  
-**Target:** browser desktop (WebGL + Web Audio)
-
----
-
-## 1. Visione
-
-**Sonic Sphere** è un'esperienza di esplorazione sonora contemplativa su una superficie sferica.  
-Il giocatore non ha obiettivi ludici: esplora, ascolta, attraversa regioni con identità timbriche diverse e transizioni meteo che trasformano il mix globale.
+**Last updated:** March 10, 2026  
+**Status:** Advanced prototype, playable, under continuous tuning  
+**Target:** desktop browser (WebGL + Web Audio)
 
 ---
 
-## 2. Stack Tecnologico
+## 1. Vision
 
-| Componente | Tecnologia | Note |
+**Sonic Sphere** is a contemplative sonic exploration experience on a spherical surface.  
+The player has no gameplay goals: they explore, listen, and traverse regions with distinct timbral identities and weather transitions that transform the global mix.
+
+---
+
+## 2. Tech Stack
+
+| Component | Technology | Notes |
 |---|---|---|
-| Runtime | TypeScript + Vite | loop real-time, orchestrazione sistemi |
-| Audio | Tone.js / Web Audio API | sintesi multi-engine + catena FX meteo |
-| Spatial Audio | Tone.Panner3D | posizionamento 3D delle sorgenti |
-| Rendering | Pixi.js (WebGL) | visual astratto ad alte prestazioni |
-| Persistenza | localStorage | posizione, heading, world epoch |
+| Runtime | TypeScript + Vite | real-time loop, systems orchestration |
+| Audio | Tone.js / Web Audio API | multi-engine synthesis + weather FX chain |
+| Spatial Audio | Tone.Panner3D | 3D source positioning |
+| Rendering | Pixi.js (WebGL) | high-performance abstract visuals |
+| Persistence | localStorage | position, heading, world epoch |
 
-Script principali:
+Main scripts:
 - `npm run dev`
 - `npm run build`
 - `npm run preview`
 
 ---
 
-## 3. Stato Attuale del Prodotto
+## 3. Current Product Status
 
-### 3.1 Esperienza Utente
+### 3.1 User Experience
 
-- Overlay iniziale/pausa artistico con click-to-enter.
-- Nessun HUD di debug/performance a schermo.
-- Persistenza stato tra sessioni.
-- Autopilot organico attivo (toggle manuale disponibile).
+- Artistic start/pause overlay with click-to-enter.
+- No debug/performance HUD on screen.
+- State persistence between sessions.
+- Organic autopilot active (manual toggle available).
 
-### 3.2 Controlli
+### 3.2 Controls
 
-- `WASD` / frecce: movimento
-- `P` o `TAB`: toggle autopilot
-- `ESC`: pausa/ripresa
-- Click overlay: avvio/ripresa audio
+- `WASD` / arrows: movement
+- `P` or `TAB`: autopilot toggle
+- `ESC`: pause/resume
+- Overlay click: start/resume audio
 
 ---
 
-## 4. Modello del Mondo
+## 4. World Model
 
-### 4.1 Geometria e movimento
+### 4.1 Geometry and movement
 
-- Raggio sfera: `SPHERE_RADIUS = 200`
-- Raggio udibile: `HEARING_RADIUS = 52`
-- Movimento su geodetica con heading locale.
-- Clamp anti-singolarità poli (`±89.5°`).
+- Sphere radius: `SPHERE_RADIUS = 200`
+- Audible radius: `HEARING_RADIUS = 52`
+- Geodesic movement with local heading.
+- Pole anti-singularity clamp (`±89.5°`).
 
-### 4.2 Sorgenti
+### 4.2 Sources
 
-- Le sorgenti oscillano lentamente attorno a una posizione di equilibrio.
-- Distribuzione spaziale pseudo-uniforme (Fibonacci-like con jitter).
-- PRNG deterministico per world layout ripetibile.
-- Detune univoco per clone archetipico per ridurre duplicazioni tonali percepite.
+- Sources slowly oscillate around an equilibrium position.
+- Pseudo-uniform spatial distribution (Fibonacci-like with jitter).
+- Deterministic PRNG for repeatable world layout.
+- Unique detune per archetype clone to reduce perceived tonal duplication.
 
-### 4.3 Cardinalità e densità
+### 4.3 Cardinality and density
 
-La densità è guidata da `PERFORMANCE_BUDGET.world.densityMultiplier`:
+Density is driven by `PERFORMANCE_BUDGET.world.densityMultiplier`:
 - `BASE_SOURCE_COUNT = max(180, round(240 * density))`
 - `RHYTHMIC_EXTRA_SOURCE_COUNT = max(120, round(180 * density))`
 - `SOURCE_COUNT = BASE + RHYTHMIC_EXTRA`
 
-Valori tipici per tier:
-- `high`: ~1260 sorgenti
-- `balanced`: ~945 sorgenti
-- `low`: ~672 sorgenti
+Typical values by tier:
+- `high`: ~1260 sources
+- `balanced`: ~945 sources
+- `low`: ~672 sources
 
 ---
 
-## 5. Engine Sonori e Archetipi
+## 5. Audio Engines and Archetypes
 
-### 5.1 Famiglie engine
+### 5.1 Engine families
 
-Ogni archetype usa uno dei seguenti engine:
-- `subtractive` (default): osc + sub + air oscillator opzionale
-- `noise`: sorgente noise colorata
+Each archetype uses one of the following engines:
+- `subtractive` (default): osc + sub + optional air oscillator
+- `noise`: colored noise source
 - `fm`: `Tone.FMOscillator`
 - `resonator`: noise excitation + feedback comb filter
 
-### 5.2 Libreria archetipi
+### 5.2 Archetype library
 
-- Archetipi totali: **132**
-- Archetipi con `mode: 'rhythmic'`: **66**
-- Engine espliciti:
+- Total archetypes: **132**
+- Archetypes with `mode: 'rhythmic'`: **66**
+- Explicit engines:
   - `noise`: 8
   - `fm`: 4
   - `resonator`: 4
-  - restanti in `subtractive` (default)
+  - remaining in `subtractive` (default)
 
-### 5.3 Distribuzione equilibrata per engine
+### 5.3 Balanced engine distribution
 
-In `SphereWorld` la generazione usa pesi per evitare sbilanciamenti forti:
+In `SphereWorld`, generation uses weights to avoid strong imbalances:
 - Base pool: `subtractive 0.55`, `noise 0.15`, `fm 0.15`, `resonator 0.15`
 - Rhythmic extra pool: `subtractive 0.5`, `noise 0.15`, `fm 0.175`, `resonator 0.175`
 
 ---
 
-## 6. Meteo Sonoro (Weather Zones)
+## 6. Sonic Weather (Weather Zones)
 
-### 6.1 Modello zone
+### 6.1 Zone model
 
-- Zone generate: `DEFAULT_ZONE_COUNT = 28`
-- Zone attive simultanee: max `3`
-- Zone forti simultanee: max `2` (+1 background)
-- Tipi: `mist`, `echo`, `ion`
-- Influenza calcolata con core + feather + smoothstep
-- Drift lento su lat/lon (world vivo nel tempo)
+- Generated zones: `DEFAULT_ZONE_COUNT = 28`
+- Simultaneously active zones: max `3`
+- Simultaneously strong zones: max `2` (+1 background)
+- Types: `mist`, `echo`, `ion`
+- Influence computed with core + feather + smoothstep
+- Slow drift on lat/lon (world alive over time)
 
-Questo rispetta la direzione estetica discussa: **max 2 forti + 1 di sfondo**.
+This matches the discussed aesthetic direction: **max 2 strong + 1 background**.
 
-### 6.2 Catena FX globale
+### 6.2 Global FX chain
 
-Il meteo modifica la catena FX globale:
+Weather modifies the global FX chain:
 - pre-FX `highpass` + `lowpass`
-- ramo `bandpass` con sweep rapido (LFO)
+- `bandpass` branch with fast sweep (LFO)
 - `FeedbackDelay`
 - `JCReverb`
-- crossfade dry/wet con attenuazione dry controllata
-- limiter finale
+- dry/wet crossfade with controlled dry attenuation
+- final limiter
 
-### 6.3 Delay organico e quantizzato
+### 6.3 Organic and quantized delay
 
-- Delay organico per zona (oscillazione lenta parametrica).
-- Stabilizzazione con quantizzazione step e hold time.
-- Transizioni più percettibili ma controllate (riduzione zipper/click).
+- Organic per-zone delay (slow parametric oscillation).
+- Stabilization with step quantization and hold time.
+- More perceptible yet controlled transitions (reduced zipper/click).
 
-### 6.4 Profili meteo pronti
+### 6.4 Ready weather profiles
 
-Sono disponibili 3 preset completi:
+Three full presets are available:
 - `subtle`
 - `experimental`
 - `extreme`
 
-Selettore attivo:
+Active selector:
 - `ACTIVE_WEATHER_FX_PROFILE` in `src/engine/WeatherZoneEngine.ts`
 
-**Default corrente:** `experimental`.
+**Current default:** `experimental`.
 
-Ogni preset modifica:
-- peso zone e ruoli
-- bias FX per tipo meteo
-- boost in overlap (2-3 zone)
-- moltiplicatori finali FX
-- quantizzazione delay
-- smoothing temporale
-- risposta/limiti runtime audio (allineati in `AudioEngine`)
+Each preset modifies:
+- zone weights and roles
+- FX bias by weather type
+- boost in overlap (2-3 zones)
+- final FX multipliers
+- delay quantization
+- temporal smoothing
+- audio runtime response/limits (aligned in `AudioEngine`)
 
 ---
 
@@ -162,148 +162,148 @@ Ogni preset modifica:
 
 ### 7.1 Layering
 
-Ordine layer (bottom -> top):
+Layer order (bottom -> top):
 - background
-- zone world/sonic
+- world/sonic zones
 - weather zones
-- trail player
-- graticola
-- horizon world
-- glyph sorgenti
+- player trail
+- graticule
+- world horizon
+- source glyphs
 - ring overlay
 - compass
 - player dot
 
-### 7.2 Zone meteo visive
+### 7.2 Visual weather zones
 
-- Colori meteo separati dalla palette audible-zone.
-- Palette distinta per tipo (`mist/echo/ion`).
-- Trasparenze elevate.
-- Overlap con blending additivo (`blendMode = 'add'`) per somma cromatica piacevole.
+- Weather colors are separate from the audible-zone palette.
+- Distinct palette per type (`mist/echo/ion`).
+- High transparency.
+- Overlap with additive blending (`blendMode = 'add'`) for pleasant color summation.
 
-### 7.3 Glyph per engine sonoro
+### 7.3 Glyphs per audio engine
 
-Mappatura forma -> engine:
-- `subtractive`: cerchio
-- `noise`: triangolo
-- `fm`: quadrato
-- `resonator`: esagono
+Shape -> engine mapping:
+- `subtractive`: circle
+- `noise`: triangle
+- `fm`: square
+- `resonator`: hexagon
 
-Le forme sono usate su glow/body/core/ring (non solo sul nucleo).
-In più ogni engine ha un proprio profilo animazione (breath/ring/pulse) per riconoscibilità immediata.
+Shapes are used for glow/body/core/ring (not only on the core).
+In addition, each engine has its own animation profile (breath/ring/pulse) for immediate recognizability.
 
 ---
 
-## 8. Performance e Anti-Glitch
+## 8. Performance and Anti-Glitch
 
-### 8.1 Tier automatici
+### 8.1 Automatic tiers
 
-`PerformanceBudget` seleziona `high | balanced | low` usando:
+`PerformanceBudget` selects `high | balanced | low` using:
 - `hardwareConcurrency`
 - `deviceMemory`
-- user-agent (Windows più conservativo)
+- user-agent (more conservative on Windows)
 
-Override disponibili:
+Available overrides:
 - query param `?perfTier=high|balanced|low`
 - `localStorage` key `sonicsphere.perfTier`
 
-### 8.2 Budget per tier
+### 8.2 Budget by tier
 
-Parametri principali per tier:
+Main parameters by tier:
 - `targetMaxActiveSources`
 - `minMaxActiveSources`
 - `maxNewStartsPerFrame`
 - loop rates (`worldHz`, `weatherHz`, `renderHz`)
-- qualità renderer (`pixelRatioCap`, `antialias`)
-- opzioni synth (air osc, timbre LFO, panning model)
+- renderer quality (`pixelRatioCap`, `antialias`)
+- synth options (air osc, timbre LFO, panning model)
 
-### 8.3 Mitigazioni click/glitch
+### 8.3 Click/glitch mitigations
 
-Misure attive:
-- quota voci adattiva con hysteresis di rilascio (`ACTIVE_RELEASE_MARGIN`)
-- limite avvii per frame (`maxNewStartsPerFrame`)
-- smoothing su gain/position sorgenti
-- guard audio su applicazione blend meteo:
-  - minimo intervallo update
-  - soglie delta minime
-  - slew-rate limit sweep range
-- ramp time differenziati per parametri critici (delay/reverb/LFO)
-- limiter in uscita master
+Active measures:
+- adaptive voice quota with release hysteresis (`ACTIVE_RELEASE_MARGIN`)
+- per-frame start limit (`maxNewStartsPerFrame`)
+- smoothing on source gain/position
+- audio guard on weather blend application:
+  - minimum update interval
+  - minimum delta thresholds
+  - slew-rate limit for sweep range
+- differentiated ramp times for critical parameters (delay/reverb/LFO)
+- master output limiter
 
 ### 8.4 HUD / debug overlay
 
-- HUD performance rimosso completamente.
-- Overlay debug meteo rimosso.
-- Lo stato performance resta tracciabile via log console e parametri budget.
+- Performance HUD fully removed.
+- Weather debug overlay removed.
+- Performance status remains trackable via console logs and budget parameters.
 
 ---
 
-## 9. Loop Runtime
+## 9. Runtime Loop
 
-Il loop principale è a step separati:
-- update mondo
-- update meteo
-- update rendering
+The main loop uses separate-step updates:
+- world update
+- weather update
+- rendering update
 
-Ogni step usa accumulator e frequenze target da `PerformanceBudget`.  
-Persistenza player ogni 5 secondi + eventi `visibilitychange/pagehide/beforeunload`.
+Each step uses accumulators and target frequencies from `PerformanceBudget`.  
+Player persistence every 5 seconds + `visibilitychange/pagehide/beforeunload` events.
 
 ---
 
-## 10. Persistenza
+## 10. Persistence
 
 Storage key: `sonicsphere-v1`
 
-Dati salvati:
+Saved data:
 - `playerPosition`
 - `playerHeading`
 - `worldEpochMs`
 - `lastSeenAtMs`
 
-Il `worldEpochMs` mantiene coerente l'evoluzione oscillatoria tra sessioni.
+`worldEpochMs` keeps oscillatory evolution coherent across sessions.
 
 ---
 
-## 11. Mappa File (punti di tuning principali)
+## 11. File Map (Main Tuning Points)
 
 - `src/engine/WeatherZoneEngine.ts`
-  - preset meteo (`subtle/experimental/extreme`)
-  - blending zone, overlap boost, quantizzazione delay, smoothing
+  - weather presets (`subtle/experimental/extreme`)
+  - zone blending, overlap boost, delay quantization, smoothing
 - `src/engine/AudioEngine.ts`
-  - profili audio allineati ai preset meteo
-  - limiti, ramp, guard anti-glitch
+  - audio profiles aligned with weather presets
+  - limits, ramps, anti-glitch guards
 - `src/engine/SphereWorld.ts`
-  - densità sorgenti, distribuzione engine, voice cap adattivo
+  - source density, engine distribution, adaptive voice cap
 - `src/audio/SourceSynth.ts`
-  - implementazione engine timbrici
+  - timbral engine implementation
 - `src/render/WorldView.ts`
-  - palette meteo additive
-  - mappatura forme per engine
-  - profili animazione glyph per engine
+  - additive weather palette
+  - engine shape mapping
+  - per-engine glyph animation profiles
 - `src/engine/sphereMath.ts`
   - `SPHERE_RADIUS`, `HEARING_RADIUS`
 - `src/engine/PerformanceBudget.ts`
-  - auto-tier e budget per hardware
+  - auto-tier and budget by hardware
 
 ---
 
-## 12. Changelog Tecnico Recente (Sintesi)
+## 12. Recent Technical Changelog (Summary)
 
-- Aggiunte weather zones che processano il mix globale.
-- Potenziati delay/reverb/band-pass sweep con carattere più experimental.
-- Delay time stabilizzato con quantizzazione + hold nelle transizioni meteo.
-- Distinzione cromatica zone meteo con blending additivo in overlap.
-- Risolte/mitigate cause di click con smoothing, guard e voice management.
-- Rimosso completamente HUD performance e relativo codice runtime.
-- Aggiunta codifica visiva per engine sonoro con forme dedicate.
-- Aggiunto profilo animazione per-engine (ring/pulse/breath).
-- Ridotto raggio sfera-mondo da 250 a 200.
-- Introdotti preset meteo `subtle / experimental / extreme` con switch rapido.
+- Added weather zones that process the global mix.
+- Boosted delay/reverb/band-pass sweep with a more experimental character.
+- Stabilized delay time with quantization + hold in weather transitions.
+- Added weather-zone color distinction with additive overlap blending.
+- Fixed/mitigated click causes with smoothing, guards, and voice management.
+- Completely removed performance HUD and related runtime code.
+- Added visual encoding for audio engines with dedicated shapes.
+- Added per-engine animation profiles (ring/pulse/breath).
+- Reduced world sphere radius from 250 to 200.
+- Introduced weather presets `subtle / experimental / extreme` with quick switching.
 
 ---
 
-## 13. Stato Decisioni
+## 13. Decision Status
 
-- Visione estetica attuale: contemplativa con zone meteo più espressive.
-- Profilo attivo per test: `experimental`.
-- Direzione compatibilità: priorità stabilità audio su macchine meno performanti.
+- Current aesthetic vision: contemplative with more expressive weather zones.
+- Active profile for testing: `experimental`.
+- Compatibility direction: prioritize audio stability on less powerful machines.

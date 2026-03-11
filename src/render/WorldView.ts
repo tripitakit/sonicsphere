@@ -286,6 +286,11 @@ export class WorldView {
   private speedLabel: PIXI.Text;
   private speedMinusPressedMs = 0;
   private speedPlusPressedMs  = 0;
+  // Weather preset buttons (3 × round, top-left below speed cluster)
+  private weatherBtns: PIXI.Container[] = [];
+  private weatherBtnBgs: PIXI.Graphics[] = [];
+  private weatherBtnPressedMs: number[] = [0, 0, 0];
+  private weatherProfileIdx = 1; // cache-invalidation tracker
   private playerTrailHistory: Array<{ pos: SphericalCoord; t: number }> = [];
   private worldScale = BASELINE_WORLD_SCALE;
   private soundHorizonPx = HEARING_RADIUS * BASELINE_WORLD_SCALE;
@@ -296,6 +301,7 @@ export class WorldView {
     onAutopilotToggle: () => void,
     onSpeedDown: () => void,
     onSpeedUp: () => void,
+    onSetWeatherProfile: (idx: number) => void,
   ) {
     // Layer order (bottom → top):
     //   background   — full-screen void colour, audio-reactive tint
@@ -344,21 +350,33 @@ export class WorldView {
     this.topCompass = new PIXI.Graphics();
     stage.addChild(this.topCompass);
 
+    // Layout constants — all secondary buttons share the same radius for uniformity.
+    // Panel column centred at x=82; 8 px gap between button edges.
+    // r=22 → diameter=44 px (meets mobile touch-target guidelines).
+    const BTN_R      = 22;  // secondary buttons
+    const AP_R       = 30;  // autopilot (primary, slightly larger)
+    const COL_CX     = 82;  // horizontal centre of the panel column
+    const AP_CY      = 46;  // autopilot button centre-y
+    const SPD_CY     = 116; // speed ±   centre-y
+    const SPD_GAP    = 52;  // centre-to-centre distance for ±  (= 2*BTN_R + 8)
+    const FX_CY      = 192; // FX preset  centre-y
+    const FX_GAP     = 52;  // centre-to-centre distance for FX (= 2*BTN_R + 8)
+
     // Autopilot button (top-left)
     this.autopilotBtn    = new PIXI.Container();
     this.autopilotBtnBg  = new PIXI.Graphics();
     this.autopilotBtnIcon = new PIXI.Graphics();
     const btnLabel = new PIXI.Text({ text: 'AUTOPILOT', style: { fontFamily: 'monospace', fontSize: 8, fill: 0x668899 } });
     btnLabel.anchor.set(0.5, 0);
-    btnLabel.y = 38;
+    btnLabel.y = AP_R + 6;
     this.autopilotBtn.addChild(this.autopilotBtnBg);
     this.autopilotBtn.addChild(this.autopilotBtnIcon);
     this.autopilotBtn.addChild(btnLabel);
-    this.autopilotBtn.x = 52;
-    this.autopilotBtn.y = 52;
+    this.autopilotBtn.x = COL_CX;
+    this.autopilotBtn.y = AP_CY;
     this.autopilotBtn.eventMode = 'static';
     this.autopilotBtn.cursor = 'pointer';
-    this.autopilotBtn.hitArea = new PIXI.Circle(0, 0, 40);
+    this.autopilotBtn.hitArea = new PIXI.Circle(0, 0, AP_R + 8);
     this.autopilotBtn.on('pointerdown', (e) => {
       e.stopPropagation();
       onAutopilotToggle();
@@ -366,7 +384,6 @@ export class WorldView {
     stage.addChild(this.autopilotBtn);
 
     // Speed buttons (−/+), shown when autopilot is off
-    // Positions in stage coords, below the autopilot button/label
     const makeSpeedBtn = (
       x: number,
       onPress: () => void,
@@ -377,28 +394,69 @@ export class WorldView {
       btn.addChild(bg);
       btn.addChild(icon);
       btn.x = x;
-      btn.y = 130;
+      btn.y = SPD_CY;
       btn.eventMode = 'static';
       btn.cursor = 'pointer';
-      btn.hitArea = new PIXI.Circle(0, 0, 26);
+      btn.hitArea = new PIXI.Circle(0, 0, BTN_R + 6);
       btn.on('pointerdown', (e) => { e.stopPropagation(); onPress(); });
       stage.addChild(btn);
       return [btn, bg, icon];
     };
 
     [this.speedBtnMinus, this.speedBtnMinusBg, this.speedBtnMinusIcon] =
-      makeSpeedBtn(20, () => { this.speedMinusPressedMs = Date.now(); onSpeedDown(); });
+      makeSpeedBtn(COL_CX - SPD_GAP / 2, () => { this.speedMinusPressedMs = Date.now(); onSpeedDown(); });
     [this.speedBtnPlus,  this.speedBtnPlusBg,  this.speedBtnPlusIcon]  =
-      makeSpeedBtn(84, () => { this.speedPlusPressedMs  = Date.now(); onSpeedUp();   });
+      makeSpeedBtn(COL_CX + SPD_GAP / 2, () => { this.speedPlusPressedMs  = Date.now(); onSpeedUp();   });
 
     this.speedLabel = new PIXI.Text({
       text: '×1.0',
-      style: { fontFamily: 'monospace', fontSize: 8, fill: 0x668899 },
+      style: { fontFamily: 'monospace', fontSize: 9, fill: 0x668899 },
     });
     this.speedLabel.anchor.set(0.5, 0);
-    this.speedLabel.x = 52;
-    this.speedLabel.y = 154;
+    this.speedLabel.x = COL_CX;
+    this.speedLabel.y = SPD_CY + BTN_R + 6;
     stage.addChild(this.speedLabel);
+
+    // Weather preset buttons (S / E / X) — below speed cluster
+    // Colors: subtle=teal, experimental=blue, extreme=orange-red
+    const WEATHER_BTN_COLORS = [0x33bbaa, 0x4477ee, 0xee5533] as const;
+    const WEATHER_BTN_LABELS  = ['S', 'E', 'X'] as const;
+    const WEATHER_BTN_XS      = [COL_CX - FX_GAP, COL_CX, COL_CX + FX_GAP] as const;
+
+    const fxSectionLabel = new PIXI.Text({
+      text: 'FX PRESET',
+      style: { fontFamily: 'monospace', fontSize: 7, fill: 0x445566 },
+    });
+    fxSectionLabel.anchor.set(0.5, 0);
+    fxSectionLabel.x = COL_CX;
+    fxSectionLabel.y = FX_CY - BTN_R - 14;
+    stage.addChild(fxSectionLabel);
+
+    for (let i = 0; i < 3; i++) {
+      const btn = new PIXI.Container();
+      const bg  = new PIXI.Graphics();
+      const lbl = new PIXI.Text({
+        text: WEATHER_BTN_LABELS[i],
+        style: { fontFamily: 'monospace', fontSize: 11, fontWeight: 'bold', fill: WEATHER_BTN_COLORS[i] },
+      });
+      lbl.anchor.set(0.5, 0.5);
+      btn.addChild(bg);
+      btn.addChild(lbl);
+      btn.x = WEATHER_BTN_XS[i] ?? COL_CX;
+      btn.y = FX_CY;
+      btn.eventMode = 'static';
+      btn.cursor = 'pointer';
+      btn.hitArea = new PIXI.Circle(0, 0, BTN_R + 6);
+      const idx = i;
+      btn.on('pointerdown', (e) => {
+        e.stopPropagation();
+        this.weatherBtnPressedMs[idx] = Date.now();
+        onSetWeatherProfile(idx);
+      });
+      stage.addChild(btn);
+      this.weatherBtns.push(btn);
+      this.weatherBtnBgs.push(bg);
+    }
 
     this.playerDot = new PIXI.Graphics();
     stage.addChild(this.playerDot);
@@ -415,10 +473,17 @@ export class WorldView {
     autopilotEnabled: boolean,
     navTarget: SphericalCoord | null = null,
     speedMult = 1,
+    weatherProfileIdx = 1,
   ): void {
     const cx = screenW / 2;
     const cy = screenH / 2;
     this.updateViewScale(screenW, screenH);
+
+    // Invalidate weather palette cache when profile changes
+    if (this.weatherProfileIdx !== weatherProfileIdx) {
+      this.weatherPaletteCache.clear();
+      this.weatherProfileIdx = weatherProfileIdx;
+    }
 
     this.container.x = cx;
     this.container.y = cy;
@@ -427,7 +492,7 @@ export class WorldView {
 
     this.drawBackground(screenW, screenH, audibleCount);
     this.drawZones(cx, cy, audibleCount, elapsed);
-    this.drawWeatherZones(playerPos, playerHeading, activeWeatherZones, cx, cy, elapsed);
+    this.drawWeatherZones(playerPos, playerHeading, activeWeatherZones, cx, cy, elapsed, weatherProfileIdx);
     this.drawPlayerTrail(playerPos, playerHeading, cx, cy, elapsed);
     this.drawGraticule(playerPos, playerHeading, cx, cy);
     this.drawVisibleWorldHorizon(cx, cy);
@@ -436,6 +501,7 @@ export class WorldView {
     this.drawTopRightCompass(screenW, playerHeading, autopilotEnabled);
     this.drawAutopilotButton(autopilotEnabled, elapsed);
     this.drawSpeedButtons(autopilotEnabled, speedMult);
+    this.drawWeatherButtons(weatherProfileIdx, elapsed);
     this.drawPlayerDot(cx, cy, playerHeading, autopilotEnabled);
 
     // Draw each source
@@ -581,23 +647,23 @@ export class WorldView {
     const iconColor   = enabled ? 0x88ffb8 : 0xff8888;
     const bgAlpha     = enabled ? 0.88 : 0.60;
 
-    // Background disc
+    // Background disc  (r=30, matches AP_R in constructor)
     this.autopilotBtnBg
-      .circle(0, 0, 34)
+      .circle(0, 0, 30)
       .fill({ color: 0x0a1f2e, alpha: bgAlpha })
       .stroke({ color: accentColor, alpha: 0.7, width: 1.5 });
 
-    // Animated glow ring (stronger pulse when on)
+    // Animated glow ring
     const glowAlpha = enabled
       ? 0.45 + 0.35 * Math.sin(elapsed * 2.1)
       : 0.20 + 0.12 * Math.sin(elapsed * 1.4);
     this.autopilotBtnBg
-      .circle(0, 0, 37)
+      .circle(0, 0, 34)
       .stroke({ color: accentColor, alpha: glowAlpha, width: 2 });
 
     // Navigation arrow icon (upward-pointing triangle)
     this.autopilotBtnIcon
-      .poly([0, -14, 10, 6, -10, 6])
+      .poly([0, -12, 9, 5, -9, 5])
       .fill({ color: iconColor, alpha: 0.9 });
   }
 
@@ -629,24 +695,24 @@ export class WorldView {
       const bgAlpha = 0.75 + 0.2 * flash;
 
       bg
-        .circle(0, 0, 20)
+        .circle(0, 0, 22)
         .fill({ color: bgColor, alpha: bgAlpha })
         .stroke({ color: accent, alpha: 0.65 + 0.35 * flash, width: 1.5 });
 
       // Flash glow ring
       if (flash > 0) {
         bg
-          .circle(0, 0, 23)
+          .circle(0, 0, 26)
           .stroke({ color: flashColor, alpha: 0.6 * flash, width: 2 });
       }
 
       // Symbol
       if (symbol === '−') {
-        icon.moveTo(-8, 0).lineTo(8, 0)
+        icon.moveTo(-9, 0).lineTo(9, 0)
           .stroke({ color: 0xaaddff, alpha: 0.9, width: 2 });
       } else {
-        icon.moveTo(-8, 0).lineTo(8, 0)
-          .moveTo(0, -8).lineTo(0, 8)
+        icon.moveTo(-9, 0).lineTo(9, 0)
+          .moveTo(0, -9).lineTo(0, 9)
           .stroke({ color: 0xaaddff, alpha: 0.9, width: 2 });
       }
     };
@@ -658,6 +724,48 @@ export class WorldView {
     const label = speedMult === 1.0 ? '×1.0' : `×${speedMult < 1 ? speedMult.toFixed(2) : speedMult % 1 === 0 ? speedMult.toFixed(1) : speedMult.toFixed(1)}`;
     this.speedLabel.text = label;
     this.speedLabel.style.fill = speedMult === 1.0 ? 0x668899 : 0x88ccee;
+  }
+
+  private drawWeatherButtons(activeIdx: number, _elapsed: number): void {
+    const ACCENT_COLORS  = [0x33bbaa, 0x4477ee, 0xee5533] as const;
+    const ICON_COLORS    = [0x77eedd, 0x88aaff, 0xff8866] as const;
+    const now = Date.now();
+
+    for (let i = 0; i < 3; i++) {
+      const bg     = this.weatherBtnBgs[i];
+      if (!bg) continue;
+      bg.clear();
+
+      const isActive  = i === activeIdx;
+      const flash     = Math.max(0, 1 - (now - (this.weatherBtnPressedMs[i] ?? 0)) / 300);
+      const accent    = ACCENT_COLORS[i] ?? 0x446688;
+      const iconColor = ICON_COLORS[i]   ?? 0x88aacc;
+      const bgAlpha   = isActive ? 0.88 : 0.50 + 0.3 * flash;
+      const bgFill    = flash > 0 ? 0x88ccff : 0x0a1f2e;
+
+      bg
+        .circle(0, 0, 22)
+        .fill({ color: bgFill, alpha: bgAlpha })
+        .stroke({ color: accent, alpha: isActive ? 0.85 : 0.45 + 0.4 * flash, width: 1.5 });
+
+      // Glow ring: always-on for active, flash-only for inactive
+      if (isActive) {
+        bg
+          .circle(0, 0, 26)
+          .stroke({ color: accent, alpha: 0.45, width: 2 });
+      } else if (flash > 0) {
+        bg
+          .circle(0, 0, 26)
+          .stroke({ color: 0x88ccff, alpha: 0.5 * flash, width: 2 });
+      }
+
+      // Update icon/label color
+      const lbl = this.weatherBtns[i]?.children[1] as PIXI.Text | undefined;
+      if (lbl) {
+        lbl.style.fill = isActive ? iconColor : (ACCENT_COLORS[i] ?? accent);
+        lbl.alpha = isActive ? 1.0 : 0.55 + 0.4 * flash;
+      }
+    }
   }
 
   private updateViewScale(screenW: number, screenH: number): void {
@@ -970,8 +1078,13 @@ export class WorldView {
     cx: number,
     cy: number,
     elapsed: number,
+    profileIdx = 1,
   ): void {
     this.weatherZones.clear();
+
+    // Visual intensity scales with profile: subtle=muted, experimental=default, extreme=vivid
+    const PROFILE_ALPHA_MULT = [0.60, 1.0, 1.50] as const;
+    const alphaMult = PROFILE_ALPHA_MULT[profileIdx] ?? 1.0;
 
     for (const zone of activeWeatherZones) {
       if (!this.isNearHemisphere(playerPos, zone.center)) continue;
@@ -986,10 +1099,10 @@ export class WorldView {
 
       const x = cx + projected.x;
       const y = cy + projected.y;
-      const palette = this.getWeatherZonePalette(zone);
+      const palette = this.getWeatherZonePalette(zone, profileIdx);
       const motion = zone.type === 'ion' ? 1.85 : zone.type === 'echo' ? 0.82 : 0.56;
       const pulse = 0.92 + 0.08 * Math.sin(elapsed * motion + distFromPlayerPx * 0.004);
-      const baseAlpha = clamp01(zone.influence) * WEATHER_VISUAL_TUNING.alphaByRole[zone.role];
+      const baseAlpha = clamp01(zone.influence) * WEATHER_VISUAL_TUNING.alphaByRole[zone.role] * alphaMult;
 
       this.weatherZones
         .circle(x, y, outerRadiusPx * pulse)
@@ -1225,37 +1338,45 @@ export class WorldView {
     }
   }
 
-  private getWeatherZonePalette(zone: ActiveWeatherZone): WeatherPatchPalette {
-    const cacheKey = `${zone.id}:${zone.type}`;
+  private getWeatherZonePalette(zone: ActiveWeatherZone, profileIdx = 1): WeatherPatchPalette {
+    // Include profile in key so palette regenerates when preset changes
+    const cacheKey = `${zone.id}:${zone.type}:${profileIdx}`;
     const cached = this.weatherPaletteCache.get(cacheKey);
     if (cached) return cached;
 
-    const profile = WEATHER_TYPE_COLOR_PROFILE[zone.type];
-    const hash = hashString(cacheKey);
-    const hue = profile.hue + hashJitter(hash, 0) * profile.hueSpread;
-    const sat = clampPercent(profile.saturation + hashJitter(hash, 8) * 8);
-    const lightShift = hashJitter(hash, 16) * 4;
+    const colorProfile = WEATHER_TYPE_COLOR_PROFILE[zone.type];
+    const hash = hashString(`${zone.id}:${zone.type}`);
+    const hue = colorProfile.hue + hashJitter(hash, 0) * colorProfile.hueSpread;
+
+    // Saturation and lightness shift by profile: subtle=muted, extreme=vivid
+    const PROFILE_SAT_DELTA   = [-14, 0, +16] as const;
+    const PROFILE_LIGHT_DELTA = [ -5, 0, +7 ] as const;
+    const satDelta   = PROFILE_SAT_DELTA[profileIdx]   ?? 0;
+    const lightDelta = PROFILE_LIGHT_DELTA[profileIdx] ?? 0;
+
+    const sat = clampPercent(colorProfile.saturation + hashJitter(hash, 8) * 8 + satDelta);
+    const lightShift = hashJitter(hash, 16) * 4 + lightDelta;
 
     const palette: WeatherPatchPalette = {
       outer: hslToHex(
         hue - 6,
         clampPercent(sat - 6),
-        clampPercent(profile.outerLightness + lightShift * 0.7),
+        clampPercent(colorProfile.outerLightness + lightShift * 0.7),
       ),
       inner: hslToHex(
         hue - 1,
         sat,
-        clampPercent(profile.innerLightness + lightShift),
+        clampPercent(colorProfile.innerLightness + lightShift),
       ),
       core: hslToHex(
         hue + 4,
         clampPercent(sat + 6),
-        clampPercent(profile.coreLightness + lightShift * 1.1),
+        clampPercent(colorProfile.coreLightness + lightShift * 1.1),
       ),
       ring: hslToHex(
         hue + 10 + hashJitter(hash, 24) * 4,
         clampPercent(sat + 8),
-        clampPercent(profile.ringLightness + lightShift * 1.2),
+        clampPercent(colorProfile.ringLightness + lightShift * 1.2),
       ),
     };
 
