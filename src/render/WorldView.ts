@@ -734,10 +734,16 @@ export class WorldView {
     const ICON_COLORS   = [0x77eedd, 0x88aaff, 0xff8866] as const;
     const now = Date.now();
 
-    // Concentric-ring icon: center dot + 6 rings, of which (i+1)*2 are lit.
-    // Ghost rings fill the button skeleton so even "subtle" never looks bare.
-    const RING_RADII  = [3.5, 6, 8.5, 11, 13.5, 16] as const; // 6 rings, ~2.5 px apart
-    const LIT_COUNTS  = [2, 4, 6] as const;                     // subtle / exp / extreme
+    // Icon: center dot + 1 / 2 / 3 concentric rings, evenly spread inside the button.
+    // Rings are sized so they never touch each other or the button edge.
+    //   subtle (1): one ring at r=12
+    //   experimental (2): two rings at r=7, 14
+    //   extreme (3): three rings at r=5, 10, 15
+    const RING_SETS: readonly (readonly number[])[] = [
+      [12],
+      [7, 14],
+      [5, 10, 15],
+    ];
 
     for (let i = 0; i < 3; i++) {
       const bg   = this.weatherBtnBgs[i];
@@ -766,22 +772,14 @@ export class WorldView {
 
       const drawColor = isActive ? iconColor : accent;
       const drawAlpha = isActive ? 1.0 : 0.55 + 0.4 * flash;
-      const litCount  = LIT_COUNTS[i] ?? 2;
+      const rings     = RING_SETS[i] ?? [12];
 
-      // Center dot
-      icon.circle(0, 0, 2).fill({ color: drawColor, alpha: drawAlpha });
+      // Center dot (slightly larger for subtle so it reads well with just 1 ring)
+      const dotR = i === 0 ? 2.8 : 2.2;
+      icon.circle(0, 0, dotR).fill({ color: drawColor, alpha: drawAlpha });
 
-      // Six concentric rings: first litCount are active, rest ghosted
-      for (let k = 0; k < 6; k++) {
-        const r   = RING_RADII[k] ?? 4;
-        const lit = k < litCount;
-        icon
-          .circle(0, 0, r)
-          .stroke({
-            color: lit ? drawColor : accent,
-            alpha: drawAlpha * (lit ? 1.0 : 0.14),
-            width: lit ? 1.5 : 1.0,
-          });
+      for (const r of rings) {
+        icon.circle(0, 0, r).stroke({ color: drawColor, alpha: drawAlpha, width: 1.6 });
       }
     }
   }
