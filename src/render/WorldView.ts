@@ -290,6 +290,7 @@ export class WorldView {
   private fxSectionLabel: PIXI.Text;
   private weatherBtns: PIXI.Container[] = [];
   private weatherBtnBgs: PIXI.Graphics[] = [];
+  private weatherBtnIcons: PIXI.Graphics[] = [];
   private weatherBtnPressedMs: number[] = [0, 0, 0];
   private weatherProfileIdx = 1; // cache-invalidation tracker
   private playerTrailHistory: Array<{ pos: SphericalCoord; t: number }> = [];
@@ -418,11 +419,8 @@ export class WorldView {
     this.speedLabel.y = SPD_CY + BTN_R + 6;
     stage.addChild(this.speedLabel);
 
-    // Weather preset buttons (S / E / X) — below speed cluster
-    // Colors: subtle=teal, experimental=blue, extreme=orange-red
-    const WEATHER_BTN_COLORS = [0x33bbaa, 0x4477ee, 0xee5533] as const;
-    const WEATHER_BTN_LABELS  = ['S', 'E', 'X'] as const;
-    const WEATHER_BTN_XS      = [COL_CX - FX_GAP, COL_CX, COL_CX + FX_GAP] as const;
+    // Weather preset buttons — below speed cluster
+    const WEATHER_BTN_XS = [COL_CX - FX_GAP, COL_CX, COL_CX + FX_GAP] as const;
 
     this.fxSectionLabel = new PIXI.Text({
       text: 'FX PRESET',
@@ -434,15 +432,11 @@ export class WorldView {
     stage.addChild(this.fxSectionLabel);
 
     for (let i = 0; i < 3; i++) {
-      const btn = new PIXI.Container();
-      const bg  = new PIXI.Graphics();
-      const lbl = new PIXI.Text({
-        text: WEATHER_BTN_LABELS[i],
-        style: { fontFamily: 'monospace', fontSize: 11, fontWeight: 'bold', fill: WEATHER_BTN_COLORS[i] },
-      });
-      lbl.anchor.set(0.5, 0.5);
+      const btn  = new PIXI.Container();
+      const bg   = new PIXI.Graphics();
+      const icon = new PIXI.Graphics();
       btn.addChild(bg);
-      btn.addChild(lbl);
+      btn.addChild(icon);
       btn.x = WEATHER_BTN_XS[i] ?? COL_CX;
       btn.y = FX_CY;
       btn.eventMode = 'static';
@@ -457,6 +451,7 @@ export class WorldView {
       stage.addChild(btn);
       this.weatherBtns.push(btn);
       this.weatherBtnBgs.push(bg);
+      this.weatherBtnIcons.push(icon);
     }
 
     this.playerDot = new PIXI.Graphics();
@@ -735,14 +730,24 @@ export class WorldView {
   }
 
   private drawWeatherButtons(activeIdx: number, _elapsed: number): void {
-    const ACCENT_COLORS  = [0x33bbaa, 0x4477ee, 0xee5533] as const;
-    const ICON_COLORS    = [0x77eedd, 0x88aaff, 0xff8866] as const;
+    const ACCENT_COLORS = [0x33bbaa, 0x4477ee, 0xee5533] as const;
+    const ICON_COLORS   = [0x77eedd, 0x88aaff, 0xff8866] as const;
     const now = Date.now();
 
+    // Arc signal icon geometry: dot + concentric arcs opening upward
+    // Button i shows (i+1) active arcs; remainder are ghosted.
+    const DEG_R     = Math.PI / 180;
+    const ARC_CY    = 5;          // icon center-of-arcs, slightly below button centre
+    const ARC_RADII = [4, 7, 10] as const;
+    const ARC_START = 215 * DEG_R;
+    const ARC_END   = 325 * DEG_R;
+
     for (let i = 0; i < 3; i++) {
-      const bg     = this.weatherBtnBgs[i];
-      if (!bg) continue;
+      const bg   = this.weatherBtnBgs[i];
+      const icon = this.weatherBtnIcons[i];
+      if (!bg || !icon) continue;
       bg.clear();
+      icon.clear();
 
       const isActive  = i === activeIdx;
       const flash     = Math.max(0, 1 - (now - (this.weatherBtnPressedMs[i] ?? 0)) / 300);
@@ -756,22 +761,30 @@ export class WorldView {
         .fill({ color: bgFill, alpha: bgAlpha })
         .stroke({ color: accent, alpha: isActive ? 0.85 : 0.45 + 0.4 * flash, width: 1.5 });
 
-      // Glow ring: always-on for active, flash-only for inactive
       if (isActive) {
-        bg
-          .circle(0, 0, 26)
-          .stroke({ color: accent, alpha: 0.45, width: 2 });
+        bg.circle(0, 0, 26).stroke({ color: accent, alpha: 0.45, width: 2 });
       } else if (flash > 0) {
-        bg
-          .circle(0, 0, 26)
-          .stroke({ color: 0x88ccff, alpha: 0.5 * flash, width: 2 });
+        bg.circle(0, 0, 26).stroke({ color: 0x88ccff, alpha: 0.5 * flash, width: 2 });
       }
 
-      // Update icon/label color
-      const lbl = this.weatherBtns[i]?.children[1] as PIXI.Text | undefined;
-      if (lbl) {
-        lbl.style.fill = isActive ? iconColor : (ACCENT_COLORS[i] ?? accent);
-        lbl.alpha = isActive ? 1.0 : 0.55 + 0.4 * flash;
+      // Draw arc signal icon
+      const drawColor = isActive ? iconColor : accent;
+      const drawAlpha = isActive ? 1.0 : 0.55 + 0.4 * flash;
+
+      // Center dot
+      icon.circle(0, ARC_CY, 2).fill({ color: drawColor, alpha: drawAlpha });
+
+      // Concentric arcs — first (i+1) are active, rest are ghosted
+      for (let k = 0; k < 3; k++) {
+        const r         = ARC_RADII[k] ?? 4;
+        const arcLit    = k <= i;
+        icon
+          .arc(0, ARC_CY, r, ARC_START, ARC_END)
+          .stroke({
+            color: arcLit ? drawColor : accent,
+            alpha: drawAlpha * (arcLit ? 1.0 : 0.18),
+            width: 1.8,
+          });
       }
     }
   }
