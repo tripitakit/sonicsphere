@@ -286,7 +286,8 @@ export class WorldView {
   private speedLabel: PIXI.Text;
   private speedMinusPressedMs = 0;
   private speedPlusPressedMs  = 0;
-  // Weather preset buttons (3 × round, top-left below speed cluster)
+  // Weather preset buttons (3 × round, bottom-left corner)
+  private fxSectionLabel: PIXI.Text;
   private weatherBtns: PIXI.Container[] = [];
   private weatherBtnBgs: PIXI.Graphics[] = [];
   private weatherBtnPressedMs: number[] = [0, 0, 0];
@@ -423,14 +424,14 @@ export class WorldView {
     const WEATHER_BTN_LABELS  = ['S', 'E', 'X'] as const;
     const WEATHER_BTN_XS      = [COL_CX - FX_GAP, COL_CX, COL_CX + FX_GAP] as const;
 
-    const fxSectionLabel = new PIXI.Text({
+    this.fxSectionLabel = new PIXI.Text({
       text: 'FX PRESET',
       style: { fontFamily: 'monospace', fontSize: 7, fill: 0x445566 },
     });
-    fxSectionLabel.anchor.set(0.5, 0);
-    fxSectionLabel.x = COL_CX;
-    fxSectionLabel.y = FX_CY - BTN_R - 14;
-    stage.addChild(fxSectionLabel);
+    this.fxSectionLabel.anchor.set(0.5, 0);
+    this.fxSectionLabel.x = COL_CX;
+    this.fxSectionLabel.y = FX_CY - BTN_R - 14; // overridden each frame
+    stage.addChild(this.fxSectionLabel);
 
     for (let i = 0; i < 3; i++) {
       const btn = new PIXI.Container();
@@ -501,6 +502,13 @@ export class WorldView {
     this.drawTopRightCompass(screenW, playerHeading, autopilotEnabled);
     this.drawAutopilotButton(autopilotEnabled, elapsed);
     this.drawSpeedButtons(autopilotEnabled, speedMult);
+    // Anchor FX cluster to bottom-left: button centres 44px above bottom edge
+    const fxBtnCY = screenH - 44;
+    for (let i = 0; i < this.weatherBtns.length; i++) {
+      const btn = this.weatherBtns[i];
+      if (btn) btn.y = fxBtnCY;
+    }
+    this.fxSectionLabel.y = fxBtnCY - 22 - 14; // BTN_R=22
     this.drawWeatherButtons(weatherProfileIdx, elapsed);
     this.drawPlayerDot(cx, cy, playerHeading, autopilotEnabled);
 
