@@ -7,6 +7,7 @@ import {
   HEARING_RADIUS,
   SPHERE_RADIUS,
   toCartesian,
+  unprojectScreenDelta,
 } from '../engine/sphereMath.ts';
 
 // How many world units map to 1 pixel on screen.
@@ -272,23 +273,44 @@ export class WorldView {
   private weatherZones: PIXI.Graphics;
   private zones: PIXI.Graphics;     // filled zone discs, between background and source dots
   private background: PIXI.Graphics;
+  private targetMarker: PIXI.Graphics;
+  private autopilotBtn: PIXI.Container;
+  private autopilotBtnBg: PIXI.Graphics;
+  private autopilotBtnIcon: PIXI.Graphics;
+  private speedBtnMinus: PIXI.Container;
+  private speedBtnPlus: PIXI.Container;
+  private speedBtnMinusBg: PIXI.Graphics;
+  private speedBtnPlusBg: PIXI.Graphics;
+  private speedBtnMinusIcon: PIXI.Graphics;
+  private speedBtnPlusIcon: PIXI.Graphics;
+  private speedLabel: PIXI.Text;
+  private speedMinusPressedMs = 0;
+  private speedPlusPressedMs  = 0;
   private playerTrailHistory: Array<{ pos: SphericalCoord; t: number }> = [];
   private worldScale = BASELINE_WORLD_SCALE;
   private soundHorizonPx = HEARING_RADIUS * BASELINE_WORLD_SCALE;
   private worldHorizonPx = SPHERE_RADIUS * BASELINE_WORLD_SCALE;
 
-  constructor(stage: PIXI.Container) {
+  constructor(
+    stage: PIXI.Container,
+    onAutopilotToggle: () => void,
+    onSpeedDown: () => void,
+    onSpeedUp: () => void,
+  ) {
     // Layer order (bottom → top):
-    //   background  — full-screen void colour, audio-reactive tint
-    //   zones       — filled discs for world/sonic surfaces
-    //   weatherZones— diffuse weather patches that drive global FX
-    //   trail       — faded player path on visible hemisphere
-    //   grid        — poles + equator + lat/lon guide lines
-    //   worldHorizon— always-visible boundary of the visible world disk
-    //   container   — source dot glyphs
-    //   horizons    — ring stroke overlays
-    //   topCompass  — top-right navigation compass
-    //   playerDot   — player center gizmo
+    //   background   — full-screen void colour, audio-reactive tint
+    //   zones        — filled discs for world/sonic surfaces
+    //   weatherZones — diffuse weather patches that drive global FX
+    //   trail        — faded player path on visible hemisphere
+    //   grid         — poles + equator + lat/lon guide lines
+    //   worldHorizon — always-visible boundary of the visible world disk
+    //   container    — source dot glyphs
+    //   horizons     — ring stroke overlays
+    //   targetMarker — navigation destination beacon
+    //   topCompass   — top-right navigation compass
+    //   autopilotBtn — top-left autopilot toggle button
+    //   speedBtns    — speed −/+ buttons (visible when autopilot off)
+    //   playerDot    — player center gizmo
 
     this.background = new PIXI.Graphics();
     stage.addChild(this.background);
@@ -316,8 +338,67 @@ export class WorldView {
     this.horizons = new PIXI.Graphics();
     stage.addChild(this.horizons);
 
+    this.targetMarker = new PIXI.Graphics();
+    stage.addChild(this.targetMarker);
+
     this.topCompass = new PIXI.Graphics();
     stage.addChild(this.topCompass);
+
+    // Autopilot button (top-left)
+    this.autopilotBtn    = new PIXI.Container();
+    this.autopilotBtnBg  = new PIXI.Graphics();
+    this.autopilotBtnIcon = new PIXI.Graphics();
+    const btnLabel = new PIXI.Text({ text: 'AUTOPILOT', style: { fontFamily: 'monospace', fontSize: 8, fill: 0x668899 } });
+    btnLabel.anchor.set(0.5, 0);
+    btnLabel.y = 38;
+    this.autopilotBtn.addChild(this.autopilotBtnBg);
+    this.autopilotBtn.addChild(this.autopilotBtnIcon);
+    this.autopilotBtn.addChild(btnLabel);
+    this.autopilotBtn.x = 52;
+    this.autopilotBtn.y = 52;
+    this.autopilotBtn.eventMode = 'static';
+    this.autopilotBtn.cursor = 'pointer';
+    this.autopilotBtn.hitArea = new PIXI.Circle(0, 0, 40);
+    this.autopilotBtn.on('pointerdown', (e) => {
+      e.stopPropagation();
+      onAutopilotToggle();
+    });
+    stage.addChild(this.autopilotBtn);
+
+    // Speed buttons (−/+), shown when autopilot is off
+    // Positions in stage coords, below the autopilot button/label
+    const makeSpeedBtn = (
+      x: number,
+      onPress: () => void,
+    ): [PIXI.Container, PIXI.Graphics, PIXI.Graphics] => {
+      const btn  = new PIXI.Container();
+      const bg   = new PIXI.Graphics();
+      const icon = new PIXI.Graphics();
+      btn.addChild(bg);
+      btn.addChild(icon);
+      btn.x = x;
+      btn.y = 130;
+      btn.eventMode = 'static';
+      btn.cursor = 'pointer';
+      btn.hitArea = new PIXI.Circle(0, 0, 26);
+      btn.on('pointerdown', (e) => { e.stopPropagation(); onPress(); });
+      stage.addChild(btn);
+      return [btn, bg, icon];
+    };
+
+    [this.speedBtnMinus, this.speedBtnMinusBg, this.speedBtnMinusIcon] =
+      makeSpeedBtn(20, () => { this.speedMinusPressedMs = Date.now(); onSpeedDown(); });
+    [this.speedBtnPlus,  this.speedBtnPlusBg,  this.speedBtnPlusIcon]  =
+      makeSpeedBtn(84, () => { this.speedPlusPressedMs  = Date.now(); onSpeedUp();   });
+
+    this.speedLabel = new PIXI.Text({
+      text: '×1.0',
+      style: { fontFamily: 'monospace', fontSize: 8, fill: 0x668899 },
+    });
+    this.speedLabel.anchor.set(0.5, 0);
+    this.speedLabel.x = 52;
+    this.speedLabel.y = 154;
+    stage.addChild(this.speedLabel);
 
     this.playerDot = new PIXI.Graphics();
     stage.addChild(this.playerDot);
@@ -332,6 +413,8 @@ export class WorldView {
     screenH: number,
     elapsed: number,
     autopilotEnabled: boolean,
+    navTarget: SphericalCoord | null = null,
+    speedMult = 1,
   ): void {
     const cx = screenW / 2;
     const cy = screenH / 2;
@@ -349,7 +432,10 @@ export class WorldView {
     this.drawGraticule(playerPos, playerHeading, cx, cy);
     this.drawVisibleWorldHorizon(cx, cy);
     this.drawHorizons(cx, cy, audibleCount, elapsed);
+    this.drawTargetMarker(playerPos, playerHeading, cx, cy, navTarget, elapsed);
     this.drawTopRightCompass(screenW, playerHeading, autopilotEnabled);
+    this.drawAutopilotButton(autopilotEnabled, elapsed);
+    this.drawSpeedButtons(autopilotEnabled, speedMult);
     this.drawPlayerDot(cx, cy, playerHeading, autopilotEnabled);
 
     // Draw each source
@@ -428,6 +514,150 @@ export class WorldView {
       x: dir.x * this.worldScale,
       y: dir.z * this.worldScale,
     };
+  }
+
+  /**
+   * Inverse projection: convert a canvas pixel to a sphere position.
+   * Uses worldScale from the last rendered frame (accurate enough for event handling).
+   * Returns null when the click falls outside the visible hemisphere disk.
+   */
+  unprojectClick(
+    px: number,
+    py: number,
+    screenW: number,
+    screenH: number,
+    playerPos: SphericalCoord,
+    playerHeading: number,
+  ): SphericalCoord | null {
+    const localX = (px - screenW / 2) / this.worldScale;
+    const localZ = (py - screenH / 2) / this.worldScale;
+    return unprojectScreenDelta(playerPos, playerHeading, localX, localZ);
+  }
+
+  private drawTargetMarker(
+    playerPos: SphericalCoord,
+    playerHeading: number,
+    cx: number,
+    cy: number,
+    target: SphericalCoord | null,
+    elapsed: number,
+  ): void {
+    this.targetMarker.clear();
+    if (target === null) return;
+
+    const p = this.project(playerPos, playerHeading, target);
+    if (Math.sqrt(p.x * p.x + p.y * p.y) > this.worldHorizonPx) return;
+
+    const tx = cx + p.x;
+    const ty = cy + p.y;
+    const pulse = Math.sin(elapsed * 3);
+
+    // Outer pulsing ring
+    const outerR = 12 + 3 * pulse;
+    const outerA = 0.3 + 0.2 * pulse;
+    this.targetMarker
+      .circle(tx, ty, outerR)
+      .stroke({ color: 0xf5a623, alpha: outerA, width: 1 });
+
+    // Inner ring
+    this.targetMarker
+      .circle(tx, ty, 7)
+      .stroke({ color: 0xf5a623, alpha: 0.75, width: 1.2 });
+
+    // Cross
+    const arm = 6;
+    this.targetMarker
+      .moveTo(tx - arm, ty).lineTo(tx + arm, ty)
+      .moveTo(tx, ty - arm).lineTo(tx, ty + arm)
+      .stroke({ color: 0xf5a623, alpha: 0.9, width: 1.2 });
+  }
+
+  private drawAutopilotButton(enabled: boolean, elapsed: number): void {
+    this.autopilotBtnBg.clear();
+    this.autopilotBtnIcon.clear();
+
+    // Green = autopilot on, red = autopilot off
+    const accentColor = enabled ? 0x44da7a : 0xda4444;
+    const iconColor   = enabled ? 0x88ffb8 : 0xff8888;
+    const bgAlpha     = enabled ? 0.88 : 0.60;
+
+    // Background disc
+    this.autopilotBtnBg
+      .circle(0, 0, 34)
+      .fill({ color: 0x0a1f2e, alpha: bgAlpha })
+      .stroke({ color: accentColor, alpha: 0.7, width: 1.5 });
+
+    // Animated glow ring (stronger pulse when on)
+    const glowAlpha = enabled
+      ? 0.45 + 0.35 * Math.sin(elapsed * 2.1)
+      : 0.20 + 0.12 * Math.sin(elapsed * 1.4);
+    this.autopilotBtnBg
+      .circle(0, 0, 37)
+      .stroke({ color: accentColor, alpha: glowAlpha, width: 2 });
+
+    // Navigation arrow icon (upward-pointing triangle)
+    this.autopilotBtnIcon
+      .poly([0, -14, 10, 6, -10, 6])
+      .fill({ color: iconColor, alpha: 0.9 });
+  }
+
+  private drawSpeedButtons(autopilotEnabled: boolean, speedMult: number): void {
+    const visible = !autopilotEnabled;
+    this.speedBtnMinus.visible = visible;
+    this.speedBtnPlus.visible  = visible;
+    this.speedLabel.visible    = visible;
+    if (!visible) return;
+
+    const now = Date.now();
+    const flashMinus = Math.max(0, 1 - (now - this.speedMinusPressedMs) / 250);
+    const flashPlus  = Math.max(0, 1 - (now - this.speedPlusPressedMs)  / 250);
+
+    const drawBtn = (
+      bg: PIXI.Graphics,
+      icon: PIXI.Graphics,
+      flash: number,
+      symbol: '−' | '+',
+    ): void => {
+      bg.clear();
+      icon.clear();
+
+      const accent     = 0x4488aa;
+      const flashColor = 0x88ddff;
+      const bgColor    = flash > 0
+        ? flashColor
+        : 0x0a1f2e;
+      const bgAlpha = 0.75 + 0.2 * flash;
+
+      bg
+        .circle(0, 0, 20)
+        .fill({ color: bgColor, alpha: bgAlpha })
+        .stroke({ color: accent, alpha: 0.65 + 0.35 * flash, width: 1.5 });
+
+      // Flash glow ring
+      if (flash > 0) {
+        bg
+          .circle(0, 0, 23)
+          .stroke({ color: flashColor, alpha: 0.6 * flash, width: 2 });
+      }
+
+      // Symbol
+      if (symbol === '−') {
+        icon.moveTo(-8, 0).lineTo(8, 0)
+          .stroke({ color: 0xaaddff, alpha: 0.9, width: 2 });
+      } else {
+        icon.moveTo(-8, 0).lineTo(8, 0)
+          .moveTo(0, -8).lineTo(0, 8)
+          .stroke({ color: 0xaaddff, alpha: 0.9, width: 2 });
+      }
+    };
+
+    drawBtn(this.speedBtnMinusBg, this.speedBtnMinusIcon, flashMinus, '−');
+    drawBtn(this.speedBtnPlusBg,  this.speedBtnPlusIcon,  flashPlus,  '+');
+
+    // Speed label: show as ×N.N, highlight if not default
+    const label = speedMult === 1.0 ? '×1.0' : `×${speedMult < 1 ? speedMult.toFixed(2) : speedMult % 1 === 0 ? speedMult.toFixed(1) : speedMult.toFixed(1)}`;
+    this.speedLabel.text = label;
+    this.speedLabel.style.fill = speedMult === 1.0 ? 0x668899 : 0x88ccee;
   }
 
   private updateViewScale(screenW: number, screenH: number): void {

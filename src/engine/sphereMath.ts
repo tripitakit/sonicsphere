@@ -181,6 +181,64 @@ export function oscillatedPosition(
   return moveOnSphere(equilibrium, 0, offsetDist);
 }
 
+/**
+ * Initial great-circle bearing from `from` to `to` in degrees [0, 360).
+ * 0 = north, 90 = east.
+ */
+export function bearingDeg(from: SphericalCoord, to: SphericalCoord): number {
+  if (chordDistance(from, to) < EPS) return 0;
+  const fromLatR = from.lat * DEG;
+  const fromLonR = from.lon * DEG;
+  const toLatR   = to.lat   * DEG;
+  const toLonR   = to.lon   * DEG;
+  const dLon = toLonR - fromLonR;
+  const y = Math.sin(dLon) * Math.cos(toLatR);
+  const x = Math.cos(fromLatR) * Math.sin(toLatR) - Math.sin(fromLatR) * Math.cos(toLatR) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * RAD) + 360) % 360;
+}
+
+/**
+ * Inverse of WorldView.project(): given a screen delta (pixels / worldScale)
+ * in player-local frame, return the sphere point that would project there.
+ *
+ * localX = (screenX - cx) / worldScale  → right component of chord vector
+ * localZ = (screenY - cy) / worldScale  → "dir.z" component (−forward)
+ *
+ * Returns null when the click falls outside the visible hemisphere disk.
+ */
+export function unprojectScreenDelta(
+  playerPos: SphericalCoord,
+  playerHeading: number,
+  localX: number,
+  localZ: number,
+): SphericalCoord | null {
+  const r2 = localX * localX + localZ * localZ;
+  if (r2 >= SPHERE_RADIUS * SPHERE_RADIUS) return null;
+
+  // Height offset along sphere normal so that T lies on the sphere surface
+  const h = -SPHERE_RADIUS + Math.sqrt(SPHERE_RADIUS * SPHERE_RADIUS - r2);
+
+  const basis = localBasis(playerPos);
+  const hR = playerHeading * DEG;
+  const forward = normalize({
+    x: Math.cos(hR) * basis.north.x + Math.sin(hR) * basis.east.x,
+    y: Math.cos(hR) * basis.north.y + Math.sin(hR) * basis.east.y,
+    z: Math.cos(hR) * basis.north.z + Math.sin(hR) * basis.east.z,
+  });
+  const right = normalize(cross(forward, basis.up));
+
+  const playerCart = toCartesian(playerPos);
+  // delta = right*localX − forward*localZ + up*h
+  // (dir.z = −dot(delta, forward) so localZ = dir.z means forward_component = −localZ)
+  const tx = playerCart.x + right.x * localX - forward.x * localZ + basis.up.x * h;
+  const ty = playerCart.y + right.y * localX - forward.y * localZ + basis.up.y * h;
+  const tz = playerCart.z + right.z * localX - forward.z * localZ + basis.up.z * h;
+
+  const len = Math.sqrt(tx * tx + ty * ty + tz * tz);
+  if (len < EPS) return null;
+  return normalizeCoord({ lat: Math.asin(ty / len) * RAD, lon: Math.atan2(tx, tz) * RAD });
+}
+
 /** Wrap lon to -180..180 and reflect properly when crossing poles. */
 export function normalizeCoord(coord: SphericalCoord): SphericalCoord {
   let lat = Number.isFinite(coord.lat) ? coord.lat : 0;

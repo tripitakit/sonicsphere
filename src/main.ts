@@ -5,6 +5,7 @@ import { Autopilot }      from './engine/Autopilot.ts';
 import { PERFORMANCE_BUDGET, PERFORMANCE_TIER } from './engine/PerformanceBudget.ts';
 import { WeatherZoneEngine } from './engine/WeatherZoneEngine.ts';
 import { KeyboardInput }  from './input/KeyboardInput.ts';
+import { ClickNavigator } from './engine/ClickNavigator.ts';
 import { Renderer }       from './render/Renderer.ts';
 import { WorldView }      from './render/WorldView.ts';
 import { loadState, saveState } from './persistence/Storage.ts';
@@ -43,7 +44,22 @@ async function bootstrap(): Promise<void> {
   const weather   = new WeatherZoneEngine();
   const input     = new KeyboardInput();
   const autopilot = new Autopilot();
-  const worldView = new WorldView(renderer.stage);
+  const clickNav  = new ClickNavigator();
+
+  // Speed steps: range mirrors autopilot SPEED_MULT limits (0.3× – 6×)
+  const SPEED_STEPS: readonly number[] = [0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.5, 6.0];
+  let speedStepIdx = 3; // default: 1.0×
+
+  // Single flag: any PixiJS button sets this synchronously so the native canvas
+  // pointerdown handler can skip the event and not plant a nav target.
+  let pixiBtnConsumed = false;
+
+  const worldView = new WorldView(
+    renderer.stage,
+    () => { pixiBtnConsumed = true; if (!paused) autopilot.toggle(); },
+    () => { pixiBtnConsumed = true; speedStepIdx = Math.max(0, speedStepIdx - 1); },
+    () => { pixiBtnConsumed = true; speedStepIdx = Math.min(SPEED_STEPS.length - 1, speedStepIdx + 1); },
+  );
 
   let paused = true;
   let transitionInFlight = false;
@@ -79,7 +95,7 @@ async function bootstrap(): Promise<void> {
   function setOverlay(mode: 'start' | 'paused'): void {
     if (overlayTitle) overlayTitle.textContent = 'Sonic Sphere';
     if (overlayHintControls) {
-      overlayHintControls.textContent = 'WASD move | P autopilot | ESC pause';
+      overlayHintControls.textContent = 'WASD / tap to navigate | P autopilot | ESC pause';
     }
     if (overlayHintPrimary) {
       overlayHintPrimary.textContent = mode === 'start' ? 'click to enter' : 'paused - click or ESC to resume';
@@ -112,6 +128,24 @@ async function bootstrap(): Promise<void> {
       transitionInFlight = false;
     }
   }
+
+  // Canvas click/tap → navigate to destination
+  renderer.app.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (paused) return;
+    // Any PixiJS button sets this flag synchronously before this handler fires
+    if (pixiBtnConsumed) { pixiBtnConsumed = false; return; }
+    e.preventDefault();
+    const rect   = renderer.app.canvas.getBoundingClientRect();
+    const scaleX = renderer.width  / rect.width;
+    const scaleY = renderer.height / rect.height;
+    const px = (e.clientX - rect.left) * scaleX;
+    const py = (e.clientY - rect.top)  * scaleY;
+    const target = worldView.unprojectClick(
+      px, py, renderer.width, renderer.height,
+      player.getPosition(), player.getHeading(),
+    );
+    if (target) clickNav.setTarget(target);
+  }, { passive: false });
 
   setOverlay('start');
 
@@ -158,13 +192,27 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
-    // Keyboard overrides autopilot when any key is held
+    // Intent priority: keyboard > click-navigation > autopilot/rest
     const kb = input.getIntent();
     const hasKbInput = kb.forward !== 0 || kb.turn !== 0;
+    const speedMult = SPEED_STEPS[speedStepIdx] ?? 1.0;
 
-    const intent = hasKbInput
-      ? kb
-      : autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
+    let intent: { forward: number; turn: number };
+    if (hasKbInput) {
+      clickNav.clearTarget(); // keyboard cancels in-progress navigation
+      // Apply manual speed multiplier when autopilot is off
+      intent = autopilot.isEnabled()
+        ? kb
+        : { forward: kb.forward * speedMult, turn: kb.turn };
+    } else {
+      const navIntent = clickNav.getIntent(player.getPosition(), player.getHeading(), speedMult, dt);
+      if (navIntent !== null) {
+        intent = navIntent;
+      } else {
+        // No active nav target: autopilot wanders (or returns {0,0} if disabled)
+        intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
+      }
+    }
 
     player.update(dt, intent.forward, intent.turn);
 
@@ -200,6 +248,8 @@ async function bootstrap(): Promise<void> {
         renderer.height,
         elapsedSecs,
         autopilot.isEnabled(),
+        clickNav.getTarget(),
+        speedMult,
       );
       renderAccumulator %= renderStepSec;
     }
