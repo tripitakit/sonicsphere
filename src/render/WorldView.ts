@@ -734,13 +734,10 @@ export class WorldView {
     const ICON_COLORS   = [0x77eedd, 0x88aaff, 0xff8866] as const;
     const now = Date.now();
 
-    // Arc signal icon geometry: dot + concentric arcs opening upward
-    // Button i shows (i+1) active arcs; remainder are ghosted.
-    const DEG_R     = Math.PI / 180;
-    const ARC_CY    = 5;          // icon center-of-arcs, slightly below button centre
-    const ARC_RADII = [4, 7, 10] as const;
-    const ARC_START = 215 * DEG_R;
-    const ARC_END   = 325 * DEG_R;
+    // Concentric-ring icon: center dot + 6 rings, of which (i+1)*2 are lit.
+    // Ghost rings fill the button skeleton so even "subtle" never looks bare.
+    const RING_RADII  = [3.5, 6, 8.5, 11, 13.5, 16] as const; // 6 rings, ~2.5 px apart
+    const LIT_COUNTS  = [2, 4, 6] as const;                     // subtle / exp / extreme
 
     for (let i = 0; i < 3; i++) {
       const bg   = this.weatherBtnBgs[i];
@@ -767,23 +764,23 @@ export class WorldView {
         bg.circle(0, 0, 26).stroke({ color: 0x88ccff, alpha: 0.5 * flash, width: 2 });
       }
 
-      // Draw arc signal icon
       const drawColor = isActive ? iconColor : accent;
       const drawAlpha = isActive ? 1.0 : 0.55 + 0.4 * flash;
+      const litCount  = LIT_COUNTS[i] ?? 2;
 
       // Center dot
-      icon.circle(0, ARC_CY, 2).fill({ color: drawColor, alpha: drawAlpha });
+      icon.circle(0, 0, 2).fill({ color: drawColor, alpha: drawAlpha });
 
-      // Concentric arcs — first (i+1) are active, rest are ghosted
-      for (let k = 0; k < 3; k++) {
-        const r         = ARC_RADII[k] ?? 4;
-        const arcLit    = k <= i;
+      // Six concentric rings: first litCount are active, rest ghosted
+      for (let k = 0; k < 6; k++) {
+        const r   = RING_RADII[k] ?? 4;
+        const lit = k < litCount;
         icon
-          .arc(0, ARC_CY, r, ARC_START, ARC_END)
+          .circle(0, 0, r)
           .stroke({
-            color: arcLit ? drawColor : accent,
-            alpha: drawAlpha * (arcLit ? 1.0 : 0.18),
-            width: 1.8,
+            color: lit ? drawColor : accent,
+            alpha: drawAlpha * (lit ? 1.0 : 0.14),
+            width: lit ? 1.5 : 1.0,
           });
       }
     }
