@@ -86,3 +86,60 @@ export function resetArchetypeOverrides(name: string): void {
 export function clearAllArchetypeOverrides(): void {
   localStorage.removeItem(ARCHETYPES_KEY);
 }
+
+// ── Weather FX overrides ──────────────────────────────────────────────────────
+
+const WEATHER_KEY = 'sonicsphere-weather-v1';
+
+export type WeatherOverrides = { profileName: string; params: Record<string, number> };
+
+export function loadWeatherOverrides(): WeatherOverrides {
+  try {
+    const raw = localStorage.getItem(WEATHER_KEY);
+    if (!raw) return { profileName: '', params: {} };
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null) return { profileName: '', params: {} };
+    const obj = parsed as Record<string, unknown>;
+    const profileName = typeof obj.profileName === 'string' ? obj.profileName : '';
+    const params = (typeof obj.params === 'object' && obj.params !== null && !Array.isArray(obj.params))
+      ? obj.params as Record<string, number>
+      : {};
+    return { profileName, params };
+  } catch {
+    return { profileName: '', params: {} };
+  }
+}
+
+export function saveWeatherProfileName(name: string): void {
+  try {
+    const overrides = loadWeatherOverrides();
+    overrides.profileName = name;
+    localStorage.setItem(WEATHER_KEY, JSON.stringify(overrides));
+  } catch {
+    // ignore
+  }
+}
+
+export function saveWeatherParam(key: string, value: number): void {
+  try {
+    const overrides = loadWeatherOverrides();
+    overrides.params[key] = value;
+    localStorage.setItem(WEATHER_KEY, JSON.stringify(overrides));
+  } catch {
+    // ignore
+  }
+}
+
+export function resetWeatherParams(): void {
+  try {
+    const overrides = loadWeatherOverrides();
+    overrides.params = {};
+    localStorage.setItem(WEATHER_KEY, JSON.stringify(overrides));
+  } catch {
+    // ignore
+  }
+}
+
+export function clearWeatherOverrides(): void {
+  localStorage.removeItem(WEATHER_KEY);
+}

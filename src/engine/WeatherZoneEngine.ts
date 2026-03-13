@@ -62,7 +62,7 @@ type WeatherFxSmoothingStep = {
   bandpassSweepRange: number;
 };
 
-type WeatherEffectTuning = {
+export type WeatherEffectTuning = {
   profileName: string;
   globalBlendAmount: number;
   roleWeightStrong: number;
@@ -88,7 +88,7 @@ type WeatherEffectTuning = {
  * Fast tuning surface for weather-FX behavior.
  * Keep edits here for rapid listening tests.
  */
-const WEATHER_EFFECT_PRESETS: Record<WeatherFxProfileName, WeatherEffectTuning> = {
+export const WEATHER_EFFECT_PRESETS: Record<WeatherFxProfileName, WeatherEffectTuning> = {
   subtle: {
     profileName: 'subtle-contemplative',
     globalBlendAmount: 1.08,
@@ -386,8 +386,9 @@ const WEATHER_EFFECT_PRESETS: Record<WeatherFxProfileName, WeatherEffectTuning> 
 };
 
 // Active FX profile — mutable so it can be switched at runtime.
+// Cloned from preset so user-param overrides don't corrupt the original preset data.
 let activeProfileName: WeatherFxProfileName = 'experimental';
-let WEATHER_EFFECT_TUNING: WeatherEffectTuning = WEATHER_EFFECT_PRESETS[activeProfileName];
+let WEATHER_EFFECT_TUNING: WeatherEffectTuning = structuredClone(WEATHER_EFFECT_PRESETS[activeProfileName]);
 
 export const WEATHER_FX_PROFILE_NAMES: readonly WeatherFxProfileName[] = ['subtle', 'experimental', 'extreme'];
 
@@ -397,7 +398,12 @@ export function getWeatherFxProfile(): WeatherFxProfileName {
 
 export function setWeatherFxProfile(name: WeatherFxProfileName): void {
   activeProfileName = name;
-  WEATHER_EFFECT_TUNING = WEATHER_EFFECT_PRESETS[name];
+  WEATHER_EFFECT_TUNING = structuredClone(WEATHER_EFFECT_PRESETS[name]);
+}
+
+/** Returns the live, mutable tuning object. Callers may mutate fields directly. */
+export function getTuning(): WeatherEffectTuning {
+  return WEATHER_EFFECT_TUNING;
 }
 
 interface WeatherPresetVariant {

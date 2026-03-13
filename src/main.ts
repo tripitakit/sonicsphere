@@ -3,13 +3,25 @@ import { SphereWorld }    from './engine/SphereWorld.ts';
 import { Player }         from './engine/Player.ts';
 import { Autopilot }      from './engine/Autopilot.ts';
 import { PERFORMANCE_BUDGET, PERFORMANCE_TIER } from './engine/PerformanceBudget.ts';
-import { WeatherZoneEngine, setWeatherFxProfile, WEATHER_FX_PROFILE_NAMES } from './engine/WeatherZoneEngine.ts';
+import {
+  WeatherZoneEngine,
+  setWeatherFxProfile,
+  getTuning,
+  WEATHER_FX_PROFILE_NAMES,
+  type WeatherEffectTuning,
+  type WeatherFxProfileName,
+} from './engine/WeatherZoneEngine.ts';
 import { KeyboardInput }  from './input/KeyboardInput.ts';
 import { ClickNavigator } from './engine/ClickNavigator.ts';
 import { Renderer }       from './render/Renderer.ts';
 import { WorldView }      from './render/WorldView.ts';
-import { loadState, saveState, loadArchetypeOverrides, saveArchetypeOverride, resetArchetypeOverrides } from './persistence/Storage.ts';
+import {
+  loadState, saveState,
+  loadArchetypeOverrides, saveArchetypeOverride, resetArchetypeOverrides,
+  loadWeatherOverrides, saveWeatherProfileName, saveWeatherParam, resetWeatherParams,
+} from './persistence/Storage.ts';
 import { ArchetypeEditor } from './ui/ArchetypeEditor.ts';
+import { WeatherEditor } from './ui/WeatherEditor.ts';
 import { ARCHETYPES } from './audio/archetypes.ts';
 import type { PlayerState, SoundArchetype } from './types.ts';
 
@@ -23,6 +35,20 @@ function applyArchetypeOverrides(overrides: ReturnType<typeof loadArchetypeOverr
       else if (key === 'filter.Q') { arch.filter.Q = Number(val); }
       else { (arch as unknown as Record<string, unknown>)[key] = val; }
     }
+  }
+}
+
+/** Applies a dotted-key weather tuning param (e.g. "fxMultiplier.reverbRoomSize") to the live tuning object. */
+function applyWeatherTuningParam(tuning: WeatherEffectTuning, key: string, value: number): void {
+  const parts = key.split('.');
+  if (parts.length === 1) {
+    (tuning as unknown as Record<string, number>)[key] = value;
+  } else if (parts.length === 2) {
+    const [sec, field] = parts;
+    (tuning as unknown as Record<string, Record<string, number>>)[sec!]![field!] = value;
+  } else if (parts.length === 3) {
+    const [sec, zone, field] = parts;
+    (tuning as unknown as Record<string, Record<string, Record<string, number>>>)[sec!]![zone!]![field!] = value;
   }
 }
 
@@ -43,6 +69,7 @@ async function bootstrap(): Promise<void> {
   const container = document.getElementById('canvas-container') as HTMLDivElement;
   const editorContainer = document.getElementById('archetype-editor') as HTMLDivElement;
   const editorTrigger   = document.getElementById('archetype-editor-trigger') as HTMLButtonElement | null;
+  const weatherEditorContainer = document.getElementById('weather-editor') as HTMLDivElement;
 
   // Snapshot original archetype defaults BEFORE applying any persisted overrides,
   // so the reset function can restore the pristine values.
@@ -88,12 +115,7 @@ async function bootstrap(): Promise<void> {
     () => { pixiBtnConsumed = true; if (!paused) autopilot.toggle(); },
     () => { pixiBtnConsumed = true; speedStepIdx = Math.max(0, speedStepIdx - 1); },
     () => { pixiBtnConsumed = true; speedStepIdx = Math.min(SPEED_STEPS.length - 1, speedStepIdx + 1); },
-    (idx: number) => {
-      pixiBtnConsumed = true;
-      weatherProfileIdx = idx;
-      const name = WEATHER_FX_PROFILE_NAMES[idx];
-      if (name) setWeatherFxProfile(name);
-    },
+    () => { pixiBtnConsumed = true; weatherEditor.toggle(); },
   );
 
   // Archetype editor
@@ -132,6 +154,43 @@ async function bootstrap(): Promise<void> {
       },
     },
   );
+
+  // Weather FX editor
+  const weatherEditor = new WeatherEditor(
+    weatherEditorContainer,
+    getTuning,
+    {
+      onPresetChange: (name: WeatherFxProfileName) => {
+        weatherProfileIdx = WEATHER_FX_PROFILE_NAMES.indexOf(name);
+        if (weatherProfileIdx < 0) weatherProfileIdx = 1;
+        setWeatherFxProfile(name);
+        saveWeatherProfileName(name);
+      },
+      onParamChange: (key: string, value: number) => {
+        applyWeatherTuningParam(getTuning(), key, value);
+        saveWeatherParam(key, value);
+      },
+      onReset: () => {
+        const currentName = WEATHER_FX_PROFILE_NAMES[weatherProfileIdx] ?? 'experimental';
+        setWeatherFxProfile(currentName);
+        resetWeatherParams();
+        weatherEditor.setProfile(currentName);
+      },
+    },
+  );
+
+  // Apply boot overrides from localStorage
+  const weatherOverrides = loadWeatherOverrides();
+  if (weatherOverrides.profileName) {
+    const idx = WEATHER_FX_PROFILE_NAMES.indexOf(weatherOverrides.profileName as WeatherFxProfileName);
+    if (idx >= 0) {
+      weatherProfileIdx = idx;
+      setWeatherFxProfile(weatherOverrides.profileName as WeatherFxProfileName);
+    }
+  }
+  for (const [key, val] of Object.entries(weatherOverrides.params)) {
+    applyWeatherTuningParam(getTuning(), key, val);
+  }
 
   let paused = true;
   let transitionInFlight = false;
@@ -339,6 +398,7 @@ async function bootstrap(): Promise<void> {
         clickNav.getTarget(),
         speedMult,
         weatherProfileIdx,
+        weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedName() : null,
       );
       renderAccumulator %= renderStepSec;

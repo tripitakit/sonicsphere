@@ -286,12 +286,11 @@ export class WorldView {
   private speedLabel: PIXI.Text;
   private speedMinusPressedMs = 0;
   private speedPlusPressedMs  = 0;
-  // Weather preset buttons (3 × round, bottom-left corner)
-  private fxSectionLabel: PIXI.Text;
-  private weatherBtns: PIXI.Container[] = [];
-  private weatherBtnBgs: PIXI.Graphics[] = [];
-  private weatherBtnIcons: PIXI.Graphics[] = [];
-  private weatherBtnPressedMs: number[] = [0, 0, 0];
+  // Single FX toggle button (bottom-left corner)
+  private fxBtn: PIXI.Container;
+  private fxBtnBg: PIXI.Graphics;
+  private fxBtnIcon: PIXI.Graphics;
+  private fxBtnPressedMs = 0;
   private weatherProfileIdx = 1; // cache-invalidation tracker
   private playerTrailHistory: Array<{ pos: SphericalCoord; t: number }> = [];
   private worldScale = BASELINE_WORLD_SCALE;
@@ -303,7 +302,7 @@ export class WorldView {
     onAutopilotToggle: () => void,
     onSpeedDown: () => void,
     onSpeedUp: () => void,
-    onSetWeatherProfile: (idx: number) => void,
+    onToggleFxOverlay: () => void,
   ) {
     // Layer order (bottom → top):
     //   background   — full-screen void colour, audio-reactive tint
@@ -353,16 +352,14 @@ export class WorldView {
     stage.addChild(this.topCompass);
 
     // Layout constants — all secondary buttons share the same radius for uniformity.
-    // Panel column centred at x=82; 8 px gap between button edges.
+    // Panel column centred at x=52; speed ± buttons touching (no gap between edges).
     // r=22 → diameter=44 px (meets mobile touch-target guidelines).
     const BTN_R      = 22;  // secondary buttons
     const AP_R       = 30;  // autopilot (primary, slightly larger)
-    const COL_CX     = 82;  // horizontal centre of the panel column
+    const COL_CX     = 52;  // horizontal centre of the panel column
     const AP_CY      = 46;  // autopilot button centre-y
     const SPD_CY     = 116; // speed ±   centre-y
-    const SPD_GAP    = 52;  // centre-to-centre distance for ±  (= 2*BTN_R + 8)
-    const FX_CY      = 192; // FX preset  centre-y
-    const FX_GAP     = 52;  // centre-to-centre distance for FX (= 2*BTN_R + 8)
+    const SPD_GAP    = 44;  // centre-to-centre distance for ± (= 2*BTN_R, buttons touching)
 
     // Autopilot button (top-left)
     this.autopilotBtn    = new PIXI.Container();
@@ -419,40 +416,22 @@ export class WorldView {
     this.speedLabel.y = SPD_CY + BTN_R + 6;
     stage.addChild(this.speedLabel);
 
-    // Weather preset buttons — below speed cluster
-    const WEATHER_BTN_XS = [COL_CX - FX_GAP, COL_CX, COL_CX + FX_GAP] as const;
-
-    this.fxSectionLabel = new PIXI.Text({
-      text: 'FX PRESET',
-      style: { fontFamily: 'monospace', fontSize: 7, fill: 0x445566 },
+    // Single FX overlay toggle button — anchored bottom-left each frame
+    this.fxBtn  = new PIXI.Container();
+    this.fxBtnBg   = new PIXI.Graphics();
+    this.fxBtnIcon = new PIXI.Graphics();
+    this.fxBtn.addChild(this.fxBtnBg);
+    this.fxBtn.addChild(this.fxBtnIcon);
+    this.fxBtn.x = COL_CX;
+    this.fxBtn.eventMode = 'static';
+    this.fxBtn.cursor = 'pointer';
+    this.fxBtn.hitArea = new PIXI.Circle(0, 0, BTN_R + 6);
+    this.fxBtn.on('pointerdown', (e) => {
+      e.stopPropagation();
+      this.fxBtnPressedMs = Date.now();
+      onToggleFxOverlay();
     });
-    this.fxSectionLabel.anchor.set(0.5, 0);
-    this.fxSectionLabel.x = COL_CX;
-    this.fxSectionLabel.y = FX_CY - BTN_R - 14; // overridden each frame
-    stage.addChild(this.fxSectionLabel);
-
-    for (let i = 0; i < 3; i++) {
-      const btn  = new PIXI.Container();
-      const bg   = new PIXI.Graphics();
-      const icon = new PIXI.Graphics();
-      btn.addChild(bg);
-      btn.addChild(icon);
-      btn.x = WEATHER_BTN_XS[i] ?? COL_CX;
-      btn.y = FX_CY;
-      btn.eventMode = 'static';
-      btn.cursor = 'pointer';
-      btn.hitArea = new PIXI.Circle(0, 0, BTN_R + 6);
-      const idx = i;
-      btn.on('pointerdown', (e) => {
-        e.stopPropagation();
-        this.weatherBtnPressedMs[idx] = Date.now();
-        onSetWeatherProfile(idx);
-      });
-      stage.addChild(btn);
-      this.weatherBtns.push(btn);
-      this.weatherBtnBgs.push(bg);
-      this.weatherBtnIcons.push(icon);
-    }
+    stage.addChild(this.fxBtn);
 
     this.playerDot = new PIXI.Graphics();
     stage.addChild(this.playerDot);
@@ -470,6 +449,7 @@ export class WorldView {
     navTarget: SphericalCoord | null = null,
     speedMult = 1,
     weatherProfileIdx = 1,
+    fxOverlayOpen = false,
     selectedArchetypeName: string | null = null,
   ): void {
     const cx = screenW / 2;
@@ -498,14 +478,9 @@ export class WorldView {
     this.drawTopRightCompass(screenW, playerHeading, autopilotEnabled);
     this.drawAutopilotButton(autopilotEnabled, elapsed);
     this.drawSpeedButtons(autopilotEnabled, speedMult);
-    // Anchor FX cluster to bottom-left: button centres 44px above bottom edge
-    const fxBtnCY = screenH - 44;
-    for (let i = 0; i < this.weatherBtns.length; i++) {
-      const btn = this.weatherBtns[i];
-      if (btn) btn.y = fxBtnCY;
-    }
-    this.fxSectionLabel.y = fxBtnCY - 22 - 14; // BTN_R=22
-    this.drawWeatherButtons(weatherProfileIdx, elapsed);
+    // Anchor FX button to bottom-left: centre 44px above bottom edge
+    this.fxBtn.y = screenH - 44;
+    this.drawFxButton(weatherProfileIdx, fxOverlayOpen, elapsed);
     this.drawPlayerDot(cx, cy, playerHeading, autopilotEnabled);
 
     // Draw each source
@@ -738,58 +713,39 @@ export class WorldView {
     this.speedLabel.style.fill = speedMult === 1.0 ? 0x668899 : 0x88ccee;
   }
 
-  private drawWeatherButtons(activeIdx: number, _elapsed: number): void {
+  private drawFxButton(profileIdx: number, overlayOpen: boolean, _elapsed: number): void {
     const ACCENT_COLORS = [0x33bbaa, 0x4477ee, 0xee5533] as const;
     const ICON_COLORS   = [0x77eedd, 0x88aaff, 0xff8866] as const;
-    const now = Date.now();
+    // Ring sets: 1/2/3 rings for subtle/experimental/extreme
+    const RING_SETS: readonly (readonly number[])[] = [[12], [7, 14], [5, 10, 15]];
 
-    // Icon: center dot + 1 / 2 / 3 concentric rings, evenly spread inside the button.
-    // Rings are sized so they never touch each other or the button edge.
-    //   subtle (1): one ring at r=12
-    //   experimental (2): two rings at r=7, 14
-    //   extreme (3): three rings at r=5, 10, 15
-    const RING_SETS: readonly (readonly number[])[] = [
-      [12],
-      [7, 14],
-      [5, 10, 15],
-    ];
+    const now    = Date.now();
+    const flash  = Math.max(0, 1 - (now - this.fxBtnPressedMs) / 300);
+    const accent = ACCENT_COLORS[profileIdx] ?? 0x4477ee;
+    const iconColor = ICON_COLORS[profileIdx] ?? 0x88aaff;
+    const bgFill = flash > 0 ? 0x88ccff : 0x0a1f2e;
+    const bgAlpha = overlayOpen ? 0.92 : 0.55 + 0.3 * flash;
 
-    for (let i = 0; i < 3; i++) {
-      const bg   = this.weatherBtnBgs[i];
-      const icon = this.weatherBtnIcons[i];
-      if (!bg || !icon) continue;
-      bg.clear();
-      icon.clear();
+    this.fxBtnBg.clear();
+    this.fxBtnIcon.clear();
 
-      const isActive  = i === activeIdx;
-      const flash     = Math.max(0, 1 - (now - (this.weatherBtnPressedMs[i] ?? 0)) / 300);
-      const accent    = ACCENT_COLORS[i] ?? 0x446688;
-      const iconColor = ICON_COLORS[i]   ?? 0x88aacc;
-      const bgAlpha   = isActive ? 0.88 : 0.50 + 0.3 * flash;
-      const bgFill    = flash > 0 ? 0x88ccff : 0x0a1f2e;
+    this.fxBtnBg
+      .circle(0, 0, 22)
+      .fill({ color: bgFill, alpha: bgAlpha })
+      .stroke({ color: accent, alpha: overlayOpen ? 0.95 : 0.55 + 0.35 * flash, width: 1.5 });
 
-      bg
-        .circle(0, 0, 22)
-        .fill({ color: bgFill, alpha: bgAlpha })
-        .stroke({ color: accent, alpha: isActive ? 0.85 : 0.45 + 0.4 * flash, width: 1.5 });
+    if (overlayOpen) {
+      this.fxBtnBg.circle(0, 0, 27).stroke({ color: accent, alpha: 0.5, width: 2.5 });
+    } else if (flash > 0) {
+      this.fxBtnBg.circle(0, 0, 26).stroke({ color: 0x88ccff, alpha: 0.5 * flash, width: 2 });
+    }
 
-      if (isActive) {
-        bg.circle(0, 0, 26).stroke({ color: accent, alpha: 0.45, width: 2 });
-      } else if (flash > 0) {
-        bg.circle(0, 0, 26).stroke({ color: 0x88ccff, alpha: 0.5 * flash, width: 2 });
-      }
-
-      const drawColor = isActive ? iconColor : accent;
-      const drawAlpha = isActive ? 1.0 : 0.55 + 0.4 * flash;
-      const rings     = RING_SETS[i] ?? [12];
-
-      // Center dot (slightly larger for subtle so it reads well with just 1 ring)
-      const dotR = i === 0 ? 2.8 : 2.2;
-      icon.circle(0, 0, dotR).fill({ color: drawColor, alpha: drawAlpha });
-
-      for (const r of rings) {
-        icon.circle(0, 0, r).stroke({ color: drawColor, alpha: drawAlpha, width: 1.6 });
-      }
+    const drawAlpha = overlayOpen ? 1.0 : 0.65 + 0.3 * flash;
+    const rings = RING_SETS[profileIdx] ?? RING_SETS[1]!;
+    const dotR = profileIdx === 0 ? 2.8 : 2.2;
+    this.fxBtnIcon.circle(0, 0, dotR).fill({ color: iconColor, alpha: drawAlpha });
+    for (const r of rings) {
+      this.fxBtnIcon.circle(0, 0, r).stroke({ color: iconColor, alpha: drawAlpha, width: 1.6 });
     }
   }
 
