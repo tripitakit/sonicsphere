@@ -201,6 +201,41 @@
     </div>
   </div>
   <div id="canvas-container"></div>
+  <div id="archetype-editor"></div>
+  <button id="archetype-editor-trigger" title="Archetype editor (E)" aria-label="Toggle archetype editor">⚙</button>
+  <style>
+    #archetype-editor-trigger {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: 44px;
+      height: 44px;
+      background: rgba(10, 28, 46, 0.85);
+      border: 1px solid #1d4a6a;
+      border-radius: 50%;
+      color: #5a9ab8;
+      font-size: 21px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 1001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    #archetype-editor-trigger:hover {
+      border-color: #33bbaa;
+      color: #33bbaa;
+      background: rgba(13, 40, 60, 0.92);
+    }
+    #archetype-editor-trigger.ae-trigger-active {
+      border-color: #33bbaa;
+      color: #33bbaa;
+      box-shadow: 0 0 8px rgba(51, 187, 170, 0.35);
+    }
+    /* Hide when start/pause overlay is visible */
+    #start-overlay:not(.hidden) ~ #archetype-editor-trigger { display: none; }
+  </style>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

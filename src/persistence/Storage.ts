@@ -43,3 +43,46 @@ export function loadState(): PersistedState | null {
 export function clearState(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
+
+// ── Archetype parameter overrides ────────────────────────────────────────────
+
+const ARCHETYPES_KEY = 'sonicsphere-archetypes-v1';
+
+export type ArchetypeOverrides = Record<string, Record<string, number | string>>;
+
+export function loadArchetypeOverrides(): ArchetypeOverrides {
+  try {
+    const raw = localStorage.getItem(ARCHETYPES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+    return parsed as ArchetypeOverrides;
+  } catch {
+    return {};
+  }
+}
+
+export function saveArchetypeOverride(name: string, param: string, value: number | string): void {
+  try {
+    const all = loadArchetypeOverrides();
+    if (!all[name]) all[name] = {};
+    all[name]![param] = value;
+    localStorage.setItem(ARCHETYPES_KEY, JSON.stringify(all));
+  } catch {
+    // Quota exceeded — silently ignore
+  }
+}
+
+export function resetArchetypeOverrides(name: string): void {
+  try {
+    const all = loadArchetypeOverrides();
+    delete all[name];
+    localStorage.setItem(ARCHETYPES_KEY, JSON.stringify(all));
+  } catch {
+    // ignore
+  }
+}
+
+export function clearAllArchetypeOverrides(): void {
+  localStorage.removeItem(ARCHETYPES_KEY);
+}

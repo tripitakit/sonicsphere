@@ -68,8 +68,26 @@ export class SoundSource {
   getEquilibrium(): SphericalCoord     { return this.state.equilibrium; }
   getId(): string                       { return this.state.id; }
   getArchetypeName(): string            { return this.state.archetype.name; }
+  getArchetype()                        { return this.state.archetype; }
   getEngineType(): SoundEngineType      { return this.state.archetype.engine ?? 'subtractive'; }
   isAudible(): boolean                  { return this.inRange; }
+
+  /**
+   * Mutates the archetype parameter (so future synths pick it up) and
+   * propagates the change to the currently active SourceSynth if present.
+   * Compound keys like 'filter.freq' and 'filter.Q' are handled here.
+   */
+  updateArchetypeParam(key: string, value: number | string): void {
+    const arch = this.state.archetype;
+    if (key === 'filter.freq') {
+      arch.filter.freq = Number(value);
+    } else if (key === 'filter.Q') {
+      arch.filter.Q = Number(value);
+    } else {
+      (arch as unknown as Record<string, unknown>)[key] = value;
+    }
+    this.synth?.updateParam(key, value);
+  }
 
   getDistanceFrom(pos: SphericalCoord): number {
     return chordDistance(pos, this.state.current);

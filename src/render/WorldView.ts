@@ -470,6 +470,7 @@ export class WorldView {
     navTarget: SphericalCoord | null = null,
     speedMult = 1,
     weatherProfileIdx = 1,
+    selectedArchetypeName: string | null = null,
   ): void {
     const cx = screenW / 2;
     const cy = screenH / 2;
@@ -550,6 +551,14 @@ export class WorldView {
         const ringA = visual.ringAlpha * (1 - ringT);
         const ringWidth = visual.ringWidth + norm * 0.22;
         this.drawSourceGlyph(g, glyphShape, ringR, palette.ring, ringA, ringWidth);
+
+        // Editor selection highlight: bright static ring + outer pulse
+        if (selectedArchetypeName !== null && source.getArchetypeName() === selectedArchetypeName) {
+          const selPulse = 0.72 + 0.28 * Math.sin(elapsed * 3.8 + phaseA);
+          this.drawSourceGlyph(g, glyphShape, radius * 3.8, 0xffffff, 0.08 * selPulse, 1.5);
+          this.drawSourceGlyph(g, glyphShape, radius * 2.9, 0x33bbaa, 0.55 * selPulse, 1.8);
+          this.drawSourceGlyph(g, glyphShape, radius * 2.2, 0xaafff0, 0.30 * selPulse, 1.2);
+        }
 
       } else {
         // Dimmer archetype-coloured hint when source is currently silent.

@@ -48,6 +48,7 @@ export class SourceSynth {
   private disposeTimer: ReturnType<typeof setTimeout> | null = null;
   private lastDistanceGain = 0;
   private lastPos = { x: 0, y: 0, z: -1 };
+  private readonly baseMainGain: number;
 
   constructor(
     private readonly archetype: SoundArchetype,
@@ -63,7 +64,8 @@ export class SourceSynth {
     const tunedFilter  = archetype.filter.freq * variation.filterFreqMult;
     const tunedLfoRate = archetype.lfoRate * variation.lfoRateMult;
 
-    this.mainMix = new Tone.Gain(engine === 'noise' ? 0.72 : engine === 'resonator' ? 0.64 : 0.58);
+    this.baseMainGain = engine === 'noise' ? 0.72 : engine === 'resonator' ? 0.64 : 0.58;
+    this.mainMix = new Tone.Gain(this.baseMainGain);
     this.preFilterBus = new Tone.Gain(1);
 
     if (engine === 'noise') {
@@ -257,6 +259,122 @@ export class SourceSynth {
   }
 
   isActive(): boolean { return this.active; }
+
+  /**
+   * Live-update a single archetype parameter on the running signal chain.
+   * Changes that require node rebuild (e.g. filter type) are silently ignored
+   * here — the archetype object mutation in SoundSource handles future synths.
+   */
+  updateParam(key: string, value: number | string): void {
+    const engine = this.archetype.engine ?? 'subtractive';
+    const isRhythmic = this.archetype.mode === 'rhythmic';
+
+    switch (key) {
+      case 'frequency': {
+        if (engine === 'subtractive') {
+          const hz = Number(value);
+          (this.mainSource as Tone.Oscillator).frequency.rampTo(hz, 0.05);
+          if (this.subOsc)  this.subOsc.frequency.rampTo(hz * 0.5, 0.05);
+          if (this.airOsc)  this.airOsc.frequency.rampTo(hz * 1.5, 0.05);
+        } else if (engine === 'fm') {
+          (this.mainSource as Tone.FMOscillator).frequency.rampTo(Number(value), 0.05);
+        }
+        break;
+      }
+      case 'waveform': {
+        if (engine === 'subtractive') {
+          (this.mainSource as Tone.Oscillator).type = value as Tone.ToneOscillatorType;
+        } else if (engine === 'fm') {
+          (this.mainSource as Tone.FMOscillator).type = value as Tone.ToneOscillatorType;
+        }
+        break;
+      }
+      case 'attack':
+        this.envelope.attack = Number(value);
+        break;
+      case 'decay':
+        this.envelope.decay = Number(value);
+        break;
+      case 'sustain': {
+        const v = Number(value);
+        this.envelope.sustain = v;
+        // Ramp mainMix gain for immediate audible effect on the held note.
+        this.mainMix.gain.rampTo(this.baseMainGain * Math.max(0, v), 0.05);
+        break;
+      }
+      case 'release': {
+        const r = Number(value);
+        this.envelope.release = r;
+        this.releaseSeconds = r;
+        break;
+      }
+      case 'lfoRate': {
+        const rate = Number(value);
+        const clampedAmp = isRhythmic
+          ? Math.min(18, Math.max(0.25, rate))
+          : Math.min(0.35, Math.max(0.02, rate * 0.12));
+        this.lfo.frequency.rampTo(clampedAmp, 0.2);
+        if (this.timbreLfo) {
+          const clampedTimbre = isRhythmic
+            ? Math.min(2.4, Math.max(0.06, rate * 0.22))
+            : Math.max(0.01, rate * 0.054);
+          this.timbreLfo.frequency.rampTo(clampedTimbre, 0.2);
+        }
+        break;
+      }
+      case 'lfoDepth': {
+        const depth = Number(value);
+        const depthNorm = Math.min(1, depth / 140);
+        const baseAmpDepth = isRhythmic
+          ? 0.58 + depthNorm * 0.38
+          : 0.12 + depthNorm * 0.45;
+        const ampDepth = engine === 'noise'
+          ? Math.min(0.95, baseAmpDepth + 0.08)
+          : engine === 'fm'
+            ? Math.min(0.92, baseAmpDepth + 0.04)
+            : baseAmpDepth;
+        this.lfo.min = 1 - ampDepth;
+        break;
+      }
+      case 'filter.freq':
+        this.filter.frequency.rampTo(Number(value), 0.1);
+        break;
+      case 'filter.Q':
+        this.filter.Q.value = Number(value);
+        break;
+      case 'fmHarmonicity':
+        if (engine === 'fm') {
+          (this.mainSource as Tone.FMOscillator).harmonicity.value = Number(value);
+        }
+        break;
+      case 'fmModulationIndex':
+        if (engine === 'fm') {
+          (this.mainSource as Tone.FMOscillator).modulationIndex.value = Number(value);
+        }
+        break;
+      case 'fmModulationType':
+        if (engine === 'fm') {
+          (this.mainSource as Tone.FMOscillator).modulationType = value as Tone.ToneOscillatorType;
+        }
+        break;
+      case 'noiseColor':
+        if (engine === 'noise' || engine === 'resonator') {
+          (this.mainSource as Tone.Noise).type = value as Tone.NoiseType;
+        }
+        break;
+      case 'resonatorHz':
+        if (this.resonatorComb) {
+          const hz = Math.max(40, Number(value));
+          this.resonatorComb.delayTime.value = clamp(1 / hz, 0.003, 0.05);
+        }
+        break;
+      case 'resonatorFeedback':
+        if (this.resonatorComb) {
+          this.resonatorComb.resonance.value = clamp(Number(value), 0.05, 0.96);
+        }
+        break;
+    }
+  }
 
   dispose(): void {
     if (this.disposeTimer !== null) {

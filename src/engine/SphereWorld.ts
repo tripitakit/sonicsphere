@@ -59,6 +59,7 @@ export class SphereWorld {
   private frameDtEma = 1 / 60;
   private lastUpdateElapsed: number | null = null;
   private lastAdaptAt = 0;
+  private soloArchetypeName: string | null = null;
 
   constructor() {
     this.sources = this.generateSources();
@@ -260,10 +261,18 @@ export class SphereWorld {
         source.forceStop();
       }
 
+      // Solo gate: silence sources that don't match the soloed archetype name.
+      const soloOk = this.soloArchetypeName === null
+        || source.getArchetypeName() === this.soloArchetypeName;
+      if (!soloOk && source.isAudible()) {
+        source.forceStop();
+      }
+
       const canStart =
         audioEnabled &&
         inRange &&
         inStartQuota &&
+        soloOk &&
         startsThisFrame < MAX_NEW_STARTS_PER_FRAME;
 
       const wasAudible = source.isAudible();
@@ -280,6 +289,36 @@ export class SphereWorld {
 
   getSources(): readonly SoundSource[] {
     return this.sources;
+  }
+
+  getActiveSources(): SoundSource[] {
+    return this.sortBuf
+      .filter(e => this.sources[e.idx]?.isAudible())
+      .map(e => this.sources[e.idx]!);
+  }
+
+  setSolo(name: string | null): void {
+    this.soloArchetypeName = name;
+    // Immediately silence any currently-running sources that don't match.
+    if (name !== null) {
+      for (const source of this.sources) {
+        if (source.getArchetypeName() !== name && source.isAudible()) {
+          source.forceStop();
+        }
+      }
+    }
+  }
+
+  getSoloArchetype(): string | null {
+    return this.soloArchetypeName;
+  }
+
+  updateArchetypeParam(archetypeName: string, key: string, value: number | string): void {
+    for (const source of this.sources) {
+      if (source.getArchetypeName() === archetypeName) {
+        source.updateArchetypeParam(key, value);
+      }
+    }
   }
 
   suspendAllVoices(): void {
