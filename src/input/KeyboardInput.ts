@@ -1,10 +1,8 @@
-export type KeyAction = 'forward' | 'back' | 'left' | 'right';
+export type KeyAction = 'rotateLeft' | 'rotateRight';
 
 const KEY_MAP: Record<string, KeyAction> = {
-  KeyW: 'forward', ArrowUp: 'forward',
-  KeyS: 'back',    ArrowDown: 'back',
-  KeyA: 'left',    ArrowLeft: 'left',
-  KeyD: 'right',   ArrowRight: 'right',
+  KeyA: 'rotateLeft',   ArrowLeft: 'rotateLeft',
+  KeyD: 'rotateRight',  ArrowRight: 'rotateRight',
 };
 
 export class KeyboardInput {
@@ -28,11 +26,8 @@ export class KeyboardInput {
     return this.held.has(action);
   }
 
-  /** Returns movement intent: forward in -1..1, turn in -1..1 */
-  getIntent(): { forward: number; turn: number } {
-    return {
-      forward: (this.isHeld('forward') ? 1 : 0) - (this.isHeld('back') ? 1 : 0),
-      turn:    (this.isHeld('right')   ? 1 : 0) - (this.isHeld('left') ? 1 : 0),
-    };
+  /** Returns gizmo rotation intent in -1..1. */
+  getRotationIntent(): number {
+    return (this.isHeld('rotateRight') ? 1 : 0) - (this.isHeld('rotateLeft') ? 1 : 0);
   }
 }

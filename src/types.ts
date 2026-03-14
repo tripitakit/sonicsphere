@@ -66,6 +66,10 @@ export interface PlayerState {
 export interface PersistedState {
   playerPosition: SphericalCoord;
   playerHeading: number;
+  playerTargetHeading?: number;
+  playerManualOverrideRemainingSec?: number;
+  // Legacy local gizmo offset kept only for migration from the previous build.
+  playerDirectionAngle?: number;
   // Stable world epoch so source oscillations continue across sessions.
   worldEpochMs?: number;
   // Last time we wrote state, useful for diagnostics and future migration.

@@ -32,6 +32,11 @@ export function loadState(): PersistedState | null {
     return {
       playerPosition: obj.playerPosition,
       playerHeading: obj.playerHeading,
+      playerTargetHeading: isFiniteNumber(obj.playerTargetHeading) ? obj.playerTargetHeading : undefined,
+      playerManualOverrideRemainingSec: isFiniteNumber(obj.playerManualOverrideRemainingSec)
+        ? obj.playerManualOverrideRemainingSec
+        : undefined,
+      playerDirectionAngle: isFiniteNumber(obj.playerDirectionAngle) ? obj.playerDirectionAngle : undefined,
       worldEpochMs: isFiniteNumber(obj.worldEpochMs) ? obj.worldEpochMs : undefined,
       lastSeenAtMs: isFiniteNumber(obj.lastSeenAtMs) ? obj.lastSeenAtMs : undefined,
     };

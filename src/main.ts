@@ -12,7 +12,6 @@ import {
   type WeatherFxProfileName,
 } from './engine/WeatherZoneEngine.ts';
 import { KeyboardInput }  from './input/KeyboardInput.ts';
-import { ClickNavigator } from './engine/ClickNavigator.ts';
 import { Renderer }       from './render/Renderer.ts';
 import { WorldView }      from './render/WorldView.ts';
 import {
@@ -61,6 +60,21 @@ function randomInitialPlayerState(): PlayerState {
   return { position: { lat, lon }, heading };
 }
 
+function resolveInitialTargetHeading(
+  playerHeading: number,
+  persisted: ReturnType<typeof loadState>,
+): number {
+  if (persisted?.playerTargetHeading !== undefined) return persisted.playerTargetHeading;
+  if (persisted?.playerDirectionAngle !== undefined) return playerHeading + persisted.playerDirectionAngle;
+  return playerHeading;
+}
+
+function resolveInitialManualOverrideRemainingSec(
+  persisted: ReturnType<typeof loadState>,
+): number {
+  return Math.max(0, persisted?.playerManualOverrideRemainingSec ?? 0);
+}
+
 async function bootstrap(): Promise<void> {
   const overlay   = document.getElementById('start-overlay') as HTMLDivElement;
   const overlayTitle = document.getElementById('overlay-title') as HTMLSpanElement | null;
@@ -96,15 +110,13 @@ async function bootstrap(): Promise<void> {
   const world     = new SphereWorld();
   const weather   = new WeatherZoneEngine();
   const input     = new KeyboardInput();
-  const autopilot = new Autopilot();
-  const clickNav  = new ClickNavigator();
+  const autopilot = new Autopilot(
+    resolveInitialTargetHeading(playerInitial.heading, persisted),
+    resolveInitialManualOverrideRemainingSec(persisted),
+  );
 
-  // Speed steps: range mirrors autopilot SPEED_MULT limits (0.3× – 6×)
-  const SPEED_STEPS: readonly number[] = [0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.5, 6.0];
-  let speedStepIdx = 3; // default: 1.0×
-
-  // Single flag: any PixiJS button sets this synchronously so the native canvas
-  // pointerdown handler can skip the event and not plant a nav target.
+  // Any PixiJS canvas control sets this synchronously so the native canvas
+  // pointerdown handler can ignore the same event.
   let pixiBtnConsumed = false;
 
   // Weather FX preset: 0=subtle, 1=experimental, 2=extreme (matches WEATHER_FX_PROFILE_NAMES order)
@@ -112,9 +124,6 @@ async function bootstrap(): Promise<void> {
 
   const worldView = new WorldView(
     renderer.stage,
-    () => { pixiBtnConsumed = true; if (!paused) autopilot.toggle(); },
-    () => { pixiBtnConsumed = true; speedStepIdx = Math.max(0, speedStepIdx - 1); },
-    () => { pixiBtnConsumed = true; speedStepIdx = Math.min(SPEED_STEPS.length - 1, speedStepIdx + 1); },
     () => { pixiBtnConsumed = true; weatherEditor.toggle(); },
   );
 
@@ -218,6 +227,8 @@ async function bootstrap(): Promise<void> {
     saveState({
       playerPosition: state.position,
       playerHeading: state.heading,
+      playerTargetHeading: autopilot.getTargetHeading(),
+      playerManualOverrideRemainingSec: autopilot.getManualOverrideRemainingSec(),
       worldEpochMs,
       lastSeenAtMs: Date.now(),
     });
@@ -226,7 +237,7 @@ async function bootstrap(): Promise<void> {
   function setOverlay(mode: 'start' | 'paused'): void {
     if (overlayTitle) overlayTitle.textContent = 'Sonic Sphere';
     if (overlayHintControls) {
-      overlayHintControls.textContent = 'WASD / tap to navigate | P autopilot | ESC pause';
+      overlayHintControls.textContent = 'click/tap set direction | A/D rotate gizmo | ESC pause';
     }
     if (overlayHintPrimary) {
       overlayHintPrimary.textContent = mode === 'start' ? 'click to enter' : 'paused - click or ESC to resume';
@@ -260,10 +271,10 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  // Canvas click/tap → navigate to destination
+  // Canvas click/tap → set persistent local steering direction
   renderer.app.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
     if (paused) return;
-    // Any PixiJS button sets this flag synchronously before this handler fires
+    // Any PixiJS canvas button sets this flag synchronously before this handler fires
     if (pixiBtnConsumed) { pixiBtnConsumed = false; return; }
     e.preventDefault();
     const rect   = renderer.app.canvas.getBoundingClientRect();
@@ -271,27 +282,18 @@ async function bootstrap(): Promise<void> {
     const scaleY = renderer.height / rect.height;
     const px = (e.clientX - rect.left) * scaleX;
     const py = (e.clientY - rect.top)  * scaleY;
-    const target = worldView.unprojectClick(
-      px, py, renderer.width, renderer.height,
-      player.getPosition(), player.getHeading(),
-    );
-    if (target) clickNav.setTarget(target);
+    const directionAngle = worldView.pickDirectionAngle(px, py, renderer.width, renderer.height);
+    if (directionAngle !== null) autopilot.setDirectionFromLocalAngle(player.getHeading(), directionAngle);
   }, { passive: false });
 
   setOverlay('start');
 
-  // Tab/P toggle autopilot, E toggle archetype editor, ESC toggles pause/resume.
+  // E toggles archetype editor, ESC toggles pause/resume.
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') {
       e.preventDefault();
       if (paused) void resumeExperience();
       else void pauseExperience();
-      return;
-    }
-
-    if (e.code === 'Tab' || e.code === 'KeyP') {
-      e.preventDefault();
-      if (!paused) autopilot.toggle();
       return;
     }
 
@@ -335,27 +337,9 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
-    // Intent priority: keyboard > click-navigation > autopilot/rest
-    const kb = input.getIntent();
-    const hasKbInput = kb.forward !== 0 || kb.turn !== 0;
-    const speedMult = SPEED_STEPS[speedStepIdx] ?? 1.0;
-
-    let intent: { forward: number; turn: number };
-    if (hasKbInput) {
-      clickNav.clearTarget(); // keyboard cancels in-progress navigation
-      // Apply manual speed multiplier when autopilot is off
-      intent = autopilot.isEnabled()
-        ? kb
-        : { forward: kb.forward * speedMult, turn: kb.turn };
-    } else {
-      const navIntent = clickNav.getIntent(player.getPosition(), player.getHeading(), speedMult, dt);
-      if (navIntent !== null) {
-        intent = navIntent;
-      } else {
-        // No active nav target: autopilot wanders (or returns {0,0} if disabled)
-        intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
-      }
-    }
+    autopilot.rotateTargetHeading(input.getRotationIntent(), dt, player.getHeading());
+    autopilot.tick(dt);
+    const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
 
     player.update(dt, intent.forward, intent.turn);
 
@@ -394,9 +378,8 @@ async function bootstrap(): Promise<void> {
         renderer.width,
         renderer.height,
         elapsedSecs,
-        autopilot.isEnabled(),
-        clickNav.getTarget(),
-        speedMult,
+        autopilot.getDirectionAngle(playerState.heading),
+        autopilot.isManualOverrideActive(),
         weatherProfileIdx,
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedName() : null,

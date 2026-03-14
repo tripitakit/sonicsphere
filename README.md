@@ -1,6 +1,6 @@
 # Sonic Sphere - Technical Documentation (Updated)
 
-**Last updated:** March 10, 2026  
+**Last updated:** March 14, 2026
 **Status:** Advanced prototype, playable, under continuous tuning  
 **Target:** desktop browser (WebGL + Web Audio)
 
@@ -37,12 +37,12 @@ Main scripts:
 - Artistic start/pause overlay with click-to-enter.
 - No debug/performance HUD on screen.
 - State persistence between sessions.
-- Organic autopilot active (manual toggle available).
+- Continuous cruise movement with always-on steering gizmo.
 
 ### 3.2 Controls
 
-- `WASD` / arrows: movement
-- `P` or `TAB`: autopilot toggle
+- `Click` / tap on the sphere: set the steering direction
+- `A` / `D` (and left/right arrows): rotate the steering gizmo
 - `ESC`: pause/resume
 - Overlay click: start/resume audio
 
