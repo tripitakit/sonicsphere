@@ -4,7 +4,7 @@ import type { SoundSource } from '../engine/SoundSource.ts';
 export interface ArchetypeEditorCallbacks {
   onParamChange: (archetypeName: string, param: string, value: number | string) => void;
   onReset: (archetypeName: string) => void;
-  onSoloToggle: (archetypeName: string, activate: boolean) => void;
+  onSoloChange: (sourceId: string | null) => void;
 }
 
 // ── Log-scale helpers ─────────────────────────────────────────────────────────
@@ -39,31 +39,12 @@ const CSS = `
 }
 #archetype-editor.ae-open { display: block; }
 
-.ae-sources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+.ae-hint {
   padding: 13px;
   border-bottom: 1px solid #1a3a55;
-}
-.ae-source-btn {
-  background: #0e2a40;
-  border: 1px solid #1d4a6a;
-  border-radius: 7px;
-  color: #5a8aaa;
-  font-family: inherit;
-  font-size: 13px;
-  padding: 4px 11px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
-}
-.ae-source-btn:hover { background: #143a55; border-color: #2d6a9a; color: #8ac8e0; }
-.ae-source-btn.ae-active {
-  background: #0e4a40;
-  border: 2px solid #33bbaa;
-  color: #ccf5ee;
-  font-weight: bold;
-  box-shadow: 0 0 10px rgba(51, 187, 170, 0.45), inset 0 0 6px rgba(51, 187, 170, 0.15);
+  color: #6b94ad;
+  font-size: 12px;
+  letter-spacing: 0.5px;
 }
 .ae-empty {
   padding: 13px;
@@ -215,13 +196,13 @@ export class ArchetypeEditor {
   private readonly originalDefaults: Map<string, SoundArchetype>;
 
   private open = false;
-  private selectedName: string | null = null;
-  private manuallySelected = false; // true = user clicked a pill; suppresses auto-select
-  private soloedName: string | null = null;
+  private selectedSourceId: string | null = null;
+  private manuallySelected = false; // true = user explicitly picked a source in the world
+  private soloedSourceId: string | null = null;
   private lastActiveKey = '';
 
-  // Current live archetypes for active sources (deduplicated by name)
-  private activeArchetypes: Map<string, SoundArchetype> = new Map();
+  // Sources currently inside the hearing radius, ordered nearest first.
+  private audibleSources: Map<string, SoundSource> = new Map();
 
   constructor(
     container: HTMLElement,
@@ -232,65 +213,82 @@ export class ArchetypeEditor {
     this.originalDefaults = originalDefaults;
     this.callbacks = callbacks;
     injectStyles();
-    this.container.innerHTML = '<div class="ae-sources"><span class="ae-empty">No active sources nearby</span></div>';
+    this.container.innerHTML = '<div class="ae-empty">No active sources nearby</div>';
   }
 
   toggle(): void {
     this.open = !this.open;
     this.container.classList.toggle('ae-open', this.open);
-    // On close: release solo and reset manual pin so next open resumes auto-select
-    if (!this.open) {
-      if (this.soloedName !== null) {
-        this.callbacks.onSoloToggle(this.soloedName, false);
-        this.soloedName = null;
-      }
+    this.lastActiveKey = ''; // force re-render on next open/update
+
+    if (this.open) {
       this.manuallySelected = false;
-      this.selectedName = null;
-      this.lastActiveKey = ''; // force re-render on next open
+      this.selectedSourceId = this.getNearestSourceId();
+      this.soloedSourceId = this.selectedSourceId;
+      this.callbacks.onSoloChange(this.soloedSourceId);
+      this.render();
+      return;
     }
+
+    this.callbacks.onSoloChange(null);
+    this.soloedSourceId = null;
+    this.manuallySelected = false;
+    this.selectedSourceId = null;
   }
 
   isOpen(): boolean { return this.open; }
-  getSelectedName(): string | null { return this.selectedName; }
+  getSelectedSourceId(): string | null { return this.selectedSourceId; }
+
+  selectSource(sourceId: string): void {
+    if (!this.open) return;
+    if (!this.audibleSources.has(sourceId)) return;
+
+    this.selectedSourceId = sourceId;
+    this.manuallySelected = true;
+    if (this.soloedSourceId !== null && this.soloedSourceId !== sourceId) {
+      this.soloedSourceId = sourceId;
+      this.callbacks.onSoloChange(sourceId);
+    }
+    this.lastActiveKey = '';
+    this.render();
+  }
 
   /**
-   * Called every game frame. Re-renders only when the set of active
-   * archetype names changes, to avoid unnecessary DOM churn.
+   * Called every game frame. Re-renders only when the ordered list of audible
+   * sources, selection, or solo state changes.
    */
-  setActiveSources(sources: SoundSource[]): void {
-    // Deduplicate by archetype name, preserving distance order (nearest first).
-    const seen = new Map<string, SoundArchetype>();
-    for (const s of sources) {
-      const name = s.getArchetypeName();
-      if (!seen.has(name)) seen.set(name, s.getArchetype());
-    }
-    this.activeArchetypes = seen;
+  setAudibleSources(sources: SoundSource[]): void {
+    const nextSources = new Map<string, SoundSource>();
+    for (const source of sources) nextSources.set(source.getId(), source);
+    this.audibleSources = nextSources;
 
-    // Nearest = first entry after distance-sorted deduplication.
-    const nearestName = seen.size > 0 ? [...seen.keys()][0]! : null;
+    const nearestSourceId = this.getNearestSourceId();
 
-    // If the manually-selected archetype left range, revert to auto-select.
-    if (this.manuallySelected && this.selectedName !== null && !seen.has(this.selectedName)) {
+    // If the manually-selected source left range, revert to auto-select.
+    if (this.manuallySelected && this.selectedSourceId !== null && !nextSources.has(this.selectedSourceId)) {
       this.manuallySelected = false;
-      this.selectedName = null;
+      this.selectedSourceId = null;
     }
 
-    // Determine target selection: respect manual pin, otherwise follow nearest.
-    const targetName = this.manuallySelected ? this.selectedName : nearestName;
+    if (!this.manuallySelected) {
+      this.selectedSourceId = nearestSourceId;
+      if (this.soloedSourceId !== null && this.soloedSourceId !== nearestSourceId) {
+        this.soloedSourceId = nearestSourceId;
+        this.callbacks.onSoloChange(nearestSourceId);
+      }
+    }
 
-    // Key encodes both the target selection and the full sorted set so that a
-    // change in nearest (without a set change) still triggers a re-render.
-    const key = targetName + '|' + [...seen.keys()].sort().join(',');
+    // If the soloed source left range, release solo and restore the full mix.
+    if (this.soloedSourceId !== null && !nextSources.has(this.soloedSourceId)) {
+      this.soloedSourceId = null;
+      this.callbacks.onSoloChange(null);
+    }
+
+    if (!this.open) return;
+
+    const key = `${this.selectedSourceId ?? ''}|${this.soloedSourceId ?? ''}|${[...nextSources.keys()].join(',')}`;
     if (key === this.lastActiveKey) return;
     this.lastActiveKey = key;
-
-    if (!this.manuallySelected) this.selectedName = nearestName;
-
-    // If the soloed archetype left range, release solo.
-    if (this.soloedName !== null && !seen.has(this.soloedName)) {
-      this.callbacks.onSoloToggle(this.soloedName, false);
-      this.soloedName = null;
-    }
 
     this.render();
   }
@@ -298,57 +296,37 @@ export class ArchetypeEditor {
   // ── Rendering ──────────────────────────────────────────────────────────────
 
   private render(): void {
-    const { container, activeArchetypes, selectedName } = this;
+    const { container, audibleSources, selectedSourceId } = this;
     container.innerHTML = '';
 
-    // Source pill list
-    const sourceBar = document.createElement('div');
-    sourceBar.className = 'ae-sources';
+    const hint = document.createElement('div');
+    hint.className = 'ae-hint';
+    hint.textContent = 'click a nearby source marker in the world to edit it';
+    container.appendChild(hint);
 
-    if (activeArchetypes.size === 0) {
+    if (audibleSources.size === 0) {
       const empty = document.createElement('span');
       empty.className = 'ae-empty';
       empty.textContent = 'No active sources nearby';
-      sourceBar.appendChild(empty);
-    } else {
-      for (const name of activeArchetypes.keys()) {
-        const btn = document.createElement('button');
-        btn.className = 'ae-source-btn' + (name === selectedName ? ' ae-active' : '');
-        btn.textContent = name;
-        btn.addEventListener('click', () => {
-          if (this.manuallySelected && this.selectedName === name) {
-            // Toggle off: deselect and revert to auto-select
-            this.manuallySelected = false;
-            this.selectedName = null;
-            // Release solo on deselect
-            if (this.soloedName !== null) {
-              this.callbacks.onSoloToggle(this.soloedName, false);
-              this.soloedName = null;
-            }
-          } else {
-            // Select this pill; release solo on previous if switching
-            if (this.soloedName !== null && this.soloedName !== name) {
-              this.callbacks.onSoloToggle(this.soloedName, false);
-              this.soloedName = null;
-            }
-            this.selectedName = name;
-            this.manuallySelected = true;
-          }
-          this.render();
-        });
-        sourceBar.appendChild(btn);
-      }
+      container.appendChild(empty);
+      return;
     }
-    container.appendChild(sourceBar);
 
     // Parameter editor
-    if (selectedName !== null) {
-      const arch = activeArchetypes.get(selectedName);
-      if (arch) this.renderEditor(arch);
+    if (selectedSourceId !== null) {
+      const source = audibleSources.get(selectedSourceId);
+      if (source) this.renderEditor(source);
+      else this.renderNoSelection();
+      return;
     }
+
+    this.renderNoSelection();
   }
 
-  private renderEditor(arch: SoundArchetype): void {
+  private renderEditor(source: SoundSource): void {
+    const arch = source.getArchetype();
+    const sourceId = source.getId();
+
     const editor = document.createElement('div');
     editor.className = 'ae-editor';
 
@@ -357,29 +335,24 @@ export class ArchetypeEditor {
     header.className = 'ae-editor-header';
     const nameEl = document.createElement('span');
     nameEl.className = 'ae-editor-name';
-    nameEl.textContent = arch.name;
+    nameEl.textContent = this.formatSourceLabel(source);
 
     const soloBtn = document.createElement('button');
-    const isSoloed = this.soloedName === arch.name;
+    const isSoloed = this.soloedSourceId === sourceId;
     soloBtn.className = 'ae-solo-btn' + (isSoloed ? ' ae-solo-active' : '');
     soloBtn.textContent = isSoloed ? '◉ solo' : '◎ solo';
     soloBtn.title = 'Mute all other sources';
     soloBtn.addEventListener('click', () => {
-      const nowSoloed = this.soloedName === arch.name;
+      const nowSoloed = this.soloedSourceId === sourceId;
       if (nowSoloed) {
         // Release solo
-        this.soloedName = null;
-        this.callbacks.onSoloToggle(arch.name, false);
+        this.soloedSourceId = null;
+        this.callbacks.onSoloChange(null);
       } else {
-        // Release any previous solo first
-        if (this.soloedName !== null) {
-          this.callbacks.onSoloToggle(this.soloedName, false);
-        }
-        this.soloedName = arch.name;
-        this.callbacks.onSoloToggle(arch.name, true);
+        this.soloedSourceId = sourceId;
+        this.callbacks.onSoloChange(sourceId);
       }
-      soloBtn.className = 'ae-solo-btn' + (this.soloedName === arch.name ? ' ae-solo-active' : '');
-      soloBtn.textContent = this.soloedName === arch.name ? '◉ solo' : '◎ solo';
+      this.render();
     });
 
     const resetBtn = document.createElement('button');
@@ -404,25 +377,25 @@ export class ArchetypeEditor {
         ['sine', 'triangle', 'square', 'sawtooth'], arch.name));
     }
 
-    // ── VOLUME + LFO ──
-    editor.appendChild(this.sectionLabel('Mod'));
-    editor.appendChild(this.linSliderRow('Vol', 'sustain', arch.sustain, 0, 1, '', arch.name));
+    // ── ENVELOPE + LFO ──
+    editor.appendChild(this.sectionLabel('Env / LFO'));
+    editor.appendChild(this.linSliderRow('Sustain', 'sustain', arch.sustain, 0, 1, '', arch.name));
     editor.appendChild(this.logSliderRow('LFO Rate', 'lfoRate', arch.lfoRate, 0.01, 20, 'Hz', arch.name));
     editor.appendChild(this.linSliderRow('LFO Depth', 'lfoDepth', arch.lfoDepth, 0, 150, '', arch.name));
 
     // ── FILTER ──
     editor.appendChild(this.sectionLabel('Filter'));
-    editor.appendChild(this.logSliderRow('Freq', 'filter.freq', arch.filter.freq, 40, 14000, 'Hz', arch.name));
+    editor.appendChild(this.logSliderRow('Cutoff', 'filter.freq', arch.filter.freq, 40, 14000, 'Hz', arch.name));
     editor.appendChild(this.linSliderRow('Q', 'filter.Q', arch.filter.Q, 0.1, 15, '', arch.name));
 
     // ── ENGINE-SPECIFIC ──
     if (engine === 'fm') {
       editor.appendChild(this.sectionLabel('FM'));
-      editor.appendChild(this.logSliderRow('Harm', 'fmHarmonicity',
+      editor.appendChild(this.logSliderRow('Ratio', 'fmHarmonicity',
         arch.fmHarmonicity ?? 1.8, 0.2, 12, '', arch.name));
-      editor.appendChild(this.linSliderRow('ModIdx', 'fmModulationIndex',
+      editor.appendChild(this.linSliderRow('Mod Idx', 'fmModulationIndex',
         arch.fmModulationIndex ?? 3.2, 0.2, 40, '', arch.name));
-      editor.appendChild(this.toggleRow('ModTyp', 'fmModulationType',
+      editor.appendChild(this.toggleRow('Mod Wave', 'fmModulationType',
         arch.fmModulationType ?? 'sine',
         ['sine', 'triangle', 'square', 'sawtooth'], arch.name));
     }
@@ -436,9 +409,9 @@ export class ArchetypeEditor {
 
     if (engine === 'resonator') {
       editor.appendChild(this.sectionLabel('Resonator'));
-      editor.appendChild(this.logSliderRow('Res Hz', 'resonatorHz',
+      editor.appendChild(this.logSliderRow('Pitch', 'resonatorHz',
         arch.resonatorHz ?? 200, 40, 2000, 'Hz', arch.name));
-      editor.appendChild(this.linSliderRow('Fdbk', 'resonatorFeedback',
+      editor.appendChild(this.linSliderRow('Feedback', 'resonatorFeedback',
         arch.resonatorFeedback ?? 0.76, 0.05, 0.96, '', arch.name));
     }
 
@@ -482,7 +455,9 @@ export class ArchetypeEditor {
       const v = sliderToLog(Number(slider.value), min, max);
       valEl.textContent = this.formatValue(v, unit);
       // Mutate the live archetype reference so the editor reflects the change
-      const arch = this.activeArchetypes.get(archetypeName);
+      const arch = this.getSelectedSource()?.getArchetypeName() === archetypeName
+        ? this.getSelectedSource()?.getArchetype()
+        : null;
       if (arch) this.setArchetypeField(arch, key, v);
       this.callbacks.onParamChange(archetypeName, key, v);
     });
@@ -520,7 +495,9 @@ export class ArchetypeEditor {
     slider.addEventListener('input', () => {
       const v = Number(slider.value);
       valEl.textContent = this.formatValue(v, unit);
-      const arch = this.activeArchetypes.get(archetypeName);
+      const arch = this.getSelectedSource()?.getArchetypeName() === archetypeName
+        ? this.getSelectedSource()?.getArchetype()
+        : null;
       if (arch) this.setArchetypeField(arch, key, v);
       this.callbacks.onParamChange(archetypeName, key, v);
     });
@@ -553,7 +530,9 @@ export class ArchetypeEditor {
       btn.addEventListener('click', () => {
         group.querySelectorAll('.ae-toggle-btn').forEach(b => b.classList.remove('ae-active'));
         btn.classList.add('ae-active');
-        const arch = this.activeArchetypes.get(archetypeName);
+        const arch = this.getSelectedSource()?.getArchetypeName() === archetypeName
+          ? this.getSelectedSource()?.getArchetype()
+          : null;
         if (arch) this.setArchetypeField(arch, key, opt);
         this.callbacks.onParamChange(archetypeName, key, opt);
       });
@@ -586,12 +565,33 @@ export class ArchetypeEditor {
     if (!defaults) return;
 
     // Restore all fields on the live archetype reference
-    const arch = this.activeArchetypes.get(archetypeName);
+    const source = this.getSelectedSource();
+    const arch = source?.getArchetypeName() === archetypeName ? source.getArchetype() : null;
     if (arch) Object.assign(arch, structuredClone(defaults));
 
     this.callbacks.onReset(archetypeName);
 
     // Force re-render of the editor panel with default values
     this.render();
+  }
+
+  private renderNoSelection(): void {
+    const empty = document.createElement('div');
+    empty.className = 'ae-empty';
+    empty.textContent = 'Select a nearby source marker in the world';
+    this.container.appendChild(empty);
+  }
+
+  private getNearestSourceId(): string | null {
+    return this.audibleSources.size > 0 ? this.audibleSources.keys().next().value ?? null : null;
+  }
+
+  private getSelectedSource(): SoundSource | null {
+    return this.selectedSourceId !== null ? this.audibleSources.get(this.selectedSourceId) ?? null : null;
+  }
+
+  private formatSourceLabel(source: SoundSource): string {
+    const suffix = source.getId().replace('source-', '#');
+    return `${source.getArchetypeName()} ${suffix}`;
   }
 }

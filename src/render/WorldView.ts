@@ -56,6 +56,7 @@ const PLAYER_TRAIL_SPEED_FAST = 9.0; // world units/s
 const DEG = Math.PI / 180;
 const RAD = 180 / Math.PI;
 const DIRECTION_PICK_DEADZONE_PX = 18;
+const SOURCE_PICK_RADIUS_PX = 18;
 
 type GridStroke = { color: number; alpha: number; width: number };
 type ArchetypePalette = {
@@ -371,7 +372,7 @@ export class WorldView {
     showManualOverride: boolean,
     weatherProfileIdx = 1,
     fxOverlayOpen = false,
-    selectedArchetypeName: string | null = null,
+    selectedSourceId: string | null = null,
   ): void {
     const cx = screenW / 2;
     const cy = screenH / 2;
@@ -445,14 +446,6 @@ export class WorldView {
         const ringWidth = visual.ringWidth + norm * 0.22;
         this.drawSourceGlyph(g, glyphShape, ringR, palette.ring, ringA, ringWidth);
 
-        // Editor selection highlight: bright static ring + outer pulse
-        if (selectedArchetypeName !== null && source.getArchetypeName() === selectedArchetypeName) {
-          const selPulse = 0.72 + 0.28 * Math.sin(elapsed * 3.8 + phaseA);
-          this.drawSourceGlyph(g, glyphShape, radius * 3.8, 0xffffff, 0.08 * selPulse, 1.5);
-          this.drawSourceGlyph(g, glyphShape, radius * 2.9, 0x33bbaa, 0.55 * selPulse, 1.8);
-          this.drawSourceGlyph(g, glyphShape, radius * 2.2, 0xaafff0, 0.30 * selPulse, 1.2);
-        }
-
       } else {
         // Dimmer archetype-coloured hint when source is currently silent.
         const pulse  = 1 + visual.silentPulseDepth * Math.sin(elapsed * visual.silentPulseRate + phaseA);
@@ -462,6 +455,13 @@ export class WorldView {
         this.drawSourceGlyph(g, glyphShape, radius * 2.0, palette.silentOuter, alpha * 0.1);
         this.drawSourceGlyph(g, glyphShape, radius * 1.3, palette.silentInner, alpha * 0.2);
         this.drawSourceGlyph(g, glyphShape, radius, palette.silentCore, alpha);
+      }
+
+      if (selectedSourceId !== null && source.getId() === selectedSourceId) {
+        const selPulse = 0.72 + 0.28 * Math.sin(elapsed * 3.8 + phaseA);
+        this.drawSourceGlyph(g, glyphShape, 14, 0xffffff, 0.08 * selPulse, 1.5);
+        this.drawSourceGlyph(g, glyphShape, 10.5, 0x33bbaa, 0.55 * selPulse, 1.8);
+        this.drawSourceGlyph(g, glyphShape, 7.8, 0xaafff0, 0.30 * selPulse, 1.2);
       }
     }
 
@@ -505,6 +505,41 @@ export class WorldView {
     if (localX * localX + localZ * localZ <= deadzone * deadzone) return 0;
 
     return normalizeSignedAngle(Math.atan2(localX, -localZ) * RAD);
+  }
+
+  pickSourceAt(
+    px: number,
+    py: number,
+    screenW: number,
+    screenH: number,
+    playerPos: SphericalCoord,
+    playerHeading: number,
+    sources: readonly SoundSource[],
+  ): string | null {
+    const cx = screenW / 2;
+    const cy = screenH / 2;
+    const hitRadius2 = SOURCE_PICK_RADIUS_PX * SOURCE_PICK_RADIUS_PX;
+    let bestId: string | null = null;
+    let bestDist2 = hitRadius2;
+
+    for (const source of sources) {
+      const projected = this.project(playerPos, playerHeading, source.getCurrentPosition());
+      if ((projected.x * projected.x + projected.y * projected.y) > this.worldHorizonPx * this.worldHorizonPx) {
+        continue;
+      }
+
+      const sx = cx + projected.x;
+      const sy = cy + projected.y;
+      const dx = px - sx;
+      const dy = py - sy;
+      const dist2 = dx * dx + dy * dy;
+      if (dist2 > bestDist2) continue;
+
+      bestDist2 = dist2;
+      bestId = source.getId();
+    }
+
+    return bestId;
   }
 
   private drawFxButton(profileIdx: number, overlayOpen: boolean, _elapsed: number): void {

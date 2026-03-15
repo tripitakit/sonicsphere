@@ -71,6 +71,11 @@ export class Autopilot {
     this.targetHeadingDeg = normalizeHeadingDeg(headingDeg);
   }
 
+  cancelManualOverride(playerHeading?: number): void {
+    if (playerHeading !== undefined) this.targetHeadingDeg = normalizeHeadingDeg(playerHeading);
+    this.manualOverrideRemainingSec = 0;
+  }
+
   private activateManualOverride(): void {
     this.manualOverrideRemainingSec = MANUAL_OVERRIDE_DURATION_SEC;
   }

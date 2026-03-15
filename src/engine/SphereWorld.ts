@@ -59,7 +59,7 @@ export class SphereWorld {
   private frameDtEma = 1 / 60;
   private lastUpdateElapsed: number | null = null;
   private lastAdaptAt = 0;
-  private soloArchetypeName: string | null = null;
+  private soloSourceId: string | null = null;
 
   constructor() {
     this.sources = this.generateSources();
@@ -254,16 +254,16 @@ export class SphereWorld {
       const inRange = entry.dist < HEARING_RADIUS;
       const inStartQuota = rank < this.adaptiveMaxActiveSources;
       const inKeepQuota = rank < (this.adaptiveMaxActiveSources + ACTIVE_RELEASE_MARGIN);
+      const isSoloSource = this.soloSourceId !== null && source.getId() === this.soloSourceId;
 
       // Quota hysteresis: keep currently audible voices a little longer to
       // avoid rapid stop/start churn when rank fluctuates around the boundary.
-      if (audioEnabled && source.isAudible() && !inKeepQuota) {
+      if (audioEnabled && source.isAudible() && !inKeepQuota && !isSoloSource) {
         source.forceStop();
       }
 
-      // Solo gate: silence sources that don't match the soloed archetype name.
-      const soloOk = this.soloArchetypeName === null
-        || source.getArchetypeName() === this.soloArchetypeName;
+      // Solo gate: silence sources that don't match the selected source id.
+      const soloOk = this.soloSourceId === null || isSoloSource;
       if (!soloOk && source.isAudible()) {
         source.forceStop();
       }
@@ -271,7 +271,7 @@ export class SphereWorld {
       const canStart =
         audioEnabled &&
         inRange &&
-        inStartQuota &&
+        (inStartQuota || isSoloSource) &&
         soloOk &&
         startsThisFrame < MAX_NEW_STARTS_PER_FRAME;
 
@@ -297,20 +297,26 @@ export class SphereWorld {
       .map(e => this.sources[e.idx]!);
   }
 
-  setSolo(name: string | null): void {
-    this.soloArchetypeName = name;
+  getSourcesInHearingRadius(): SoundSource[] {
+    return this.sortBuf
+      .filter(e => e.dist < HEARING_RADIUS)
+      .map(e => this.sources[e.idx]!);
+  }
+
+  setSoloSource(sourceId: string | null): void {
+    this.soloSourceId = sourceId;
     // Immediately silence any currently-running sources that don't match.
-    if (name !== null) {
+    if (sourceId !== null) {
       for (const source of this.sources) {
-        if (source.getArchetypeName() !== name && source.isAudible()) {
+        if (source.getId() !== sourceId && source.isAudible()) {
           source.forceStop();
         }
       }
     }
   }
 
-  getSoloArchetype(): string | null {
-    return this.soloArchetypeName;
+  getSoloSource(): string | null {
+    return this.soloSourceId;
   }
 
   updateArchetypeParam(archetypeName: string, key: string, value: number | string): void {

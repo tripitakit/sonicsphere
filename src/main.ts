@@ -3,6 +3,7 @@ import { SphereWorld }    from './engine/SphereWorld.ts';
 import { Player }         from './engine/Player.ts';
 import { Autopilot }      from './engine/Autopilot.ts';
 import { PERFORMANCE_BUDGET, PERFORMANCE_TIER } from './engine/PerformanceBudget.ts';
+import { chordDistance } from './engine/sphereMath.ts';
 import {
   WeatherZoneEngine,
   setWeatherFxProfile,
@@ -122,9 +123,24 @@ async function bootstrap(): Promise<void> {
   // Weather FX preset: 0=subtle, 1=experimental, 2=extreme (matches WEATHER_FX_PROFILE_NAMES order)
   let weatherProfileIdx = 1; // default: experimental
 
+  function toggleWeatherEditor(): void {
+    if (!weatherEditor.isOpen()) {
+      // About to open — freeze gizmo and select nearest zone
+      autopilot.cancelManualOverride(player.getHeading());
+      const playerPos = player.getPosition();
+      const zones = latestWeatherFrame.activeZones.map(z => ({
+        id: z.id,
+        type: z.type,
+        distance: chordDistance(playerPos, z.center),
+      })).sort((a, b) => a.distance - b.distance);
+      weatherEditor.setPlayerZones(zones);
+    }
+    weatherEditor.toggle();
+  }
+
   const worldView = new WorldView(
     renderer.stage,
-    () => { pixiBtnConsumed = true; weatherEditor.toggle(); },
+    () => { pixiBtnConsumed = true; toggleWeatherEditor(); },
   );
 
   // Archetype editor
@@ -136,8 +152,8 @@ async function bootstrap(): Promise<void> {
         world.updateArchetypeParam(archetypeName, param, value);
         saveArchetypeOverride(archetypeName, param, value);
       },
-      onSoloToggle: (archetypeName, activate) => {
-        world.setSolo(activate ? archetypeName : null);
+      onSoloChange: (sourceId) => {
+        world.setSoloSource(sourceId);
       },
       onReset: (archetypeName) => {
         // Restore all world sources' archetype objects to original defaults
@@ -245,6 +261,16 @@ async function bootstrap(): Promise<void> {
     overlay.classList.remove('hidden');
   }
 
+  function toggleArchetypeEditor(): void {
+    archetypeEditor.setAudibleSources(world.getSourcesInHearingRadius());
+    archetypeEditor.toggle();
+    editorTrigger?.classList.toggle('ae-trigger-active', archetypeEditor.isOpen());
+
+    if (archetypeEditor.isOpen()) {
+      autopilot.cancelManualOverride(player.getHeading());
+    }
+  }
+
   async function resumeExperience(): Promise<void> {
     if (!paused || transitionInFlight) return;
     transitionInFlight = true;
@@ -271,7 +297,7 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  // Canvas click/tap → set persistent local steering direction
+  // Canvas click/tap → select editable source in edit mode, otherwise set steering direction
   renderer.app.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
     if (paused) return;
     // Any PixiJS canvas button sets this flag synchronously before this handler fires
@@ -282,13 +308,31 @@ async function bootstrap(): Promise<void> {
     const scaleY = renderer.height / rect.height;
     const px = (e.clientX - rect.left) * scaleX;
     const py = (e.clientY - rect.top)  * scaleY;
+
+    if (archetypeEditor.isOpen()) {
+      const sourceId = worldView.pickSourceAt(
+        px,
+        py,
+        renderer.width,
+        renderer.height,
+        player.getPosition(),
+        player.getHeading(),
+        world.getSourcesInHearingRadius(),
+      );
+      if (sourceId !== null) archetypeEditor.selectSource(sourceId);
+      return;
+    }
+
+    // Block direction steering while weather zone editor is open
+    if (weatherEditor.isOpen()) return;
+
     const directionAngle = worldView.pickDirectionAngle(px, py, renderer.width, renderer.height);
     if (directionAngle !== null) autopilot.setDirectionFromLocalAngle(player.getHeading(), directionAngle);
   }, { passive: false });
 
   setOverlay('start');
 
-  // E toggles archetype editor, ESC toggles pause/resume.
+  // E toggles archetype editor, Z toggles weather zone editor, ESC toggles pause/resume.
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') {
       e.preventDefault();
@@ -299,14 +343,17 @@ async function bootstrap(): Promise<void> {
 
     if (e.code === 'KeyE') {
       e.preventDefault();
-      archetypeEditor.toggle();
-      editorTrigger?.classList.toggle('ae-trigger-active', archetypeEditor.isOpen());
+      toggleArchetypeEditor();
+    }
+
+    if (e.code === 'KeyZ') {
+      e.preventDefault();
+      toggleWeatherEditor();
     }
   });
 
   editorTrigger?.addEventListener('click', () => {
-    archetypeEditor.toggle();
-    editorTrigger.classList.toggle('ae-trigger-active', archetypeEditor.isOpen());
+    toggleArchetypeEditor();
   });
 
   // User gesture gate: click to start/resume audio.
@@ -337,11 +384,12 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
-    autopilot.rotateTargetHeading(input.getRotationIntent(), dt, player.getHeading());
-    autopilot.tick(dt);
-    const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
-
-    player.update(dt, intent.forward, intent.turn);
+    if (!archetypeEditor.isOpen() && !weatherEditor.isOpen()) {
+      autopilot.rotateTargetHeading(input.getRotationIntent(), dt, player.getHeading());
+      autopilot.tick(dt);
+      const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
+      player.update(dt, intent.forward, intent.turn);
+    }
 
     const playerState = player.getState();
     worldAccumulator += dt;
@@ -357,10 +405,7 @@ async function bootstrap(): Promise<void> {
         audio.isStarted(),
       );
       worldAccumulator %= worldStepSec;
-      // Feed active sources to the editor (cheap: filtered only when editor is open)
-      if (archetypeEditor.isOpen()) {
-        archetypeEditor.setActiveSources(world.getActiveSources());
-      }
+      archetypeEditor.setAudibleSources(world.getSourcesInHearingRadius());
     }
 
     if (weatherAccumulator >= weatherStepSec) {
@@ -370,11 +415,14 @@ async function bootstrap(): Promise<void> {
     }
 
     if (renderAccumulator >= renderStepSec) {
+      const weatherZonesToRender = weatherEditor.isOpen()
+        ? latestWeatherFrame.activeZones.filter(z => z.id === weatherEditor.getSelectedZoneId())
+        : latestWeatherFrame.activeZones;
       worldView.update(
         playerState.position,
         playerState.heading,
         world.getSources(),
-        latestWeatherFrame.activeZones,
+        weatherZonesToRender,
         renderer.width,
         renderer.height,
         elapsedSecs,
@@ -382,7 +430,7 @@ async function bootstrap(): Promise<void> {
         autopilot.isManualOverrideActive(),
         weatherProfileIdx,
         weatherEditor.isOpen(),
-        archetypeEditor.isOpen() ? archetypeEditor.getSelectedName() : null,
+        archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
       );
       renderAccumulator %= renderStepSec;
     }

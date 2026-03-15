@@ -1,5 +1,12 @@
 import type { WeatherEffectTuning, WeatherFxProfileName } from '../engine/WeatherZoneEngine.ts';
+import type { WeatherZoneType } from '../types.ts';
 import { WEATHER_EFFECT_PRESETS, WEATHER_FX_PROFILE_NAMES } from '../engine/WeatherZoneEngine.ts';
+
+export interface PlayerZoneInfo {
+  id: string;
+  type: WeatherZoneType;
+  distance: number;
+}
 
 export interface WeatherEditorCallbacks {
   onPresetChange: (name: WeatherFxProfileName) => void;
@@ -116,6 +123,11 @@ const CSS = `
   color: #88ccee;
   font-weight: bold;
 }
+.we-zone-pill.we-zone-disabled {
+  opacity: 0.25;
+  pointer-events: none;
+  cursor: default;
+}
 
 /* Sliders */
 .we-param-row {
@@ -215,6 +227,13 @@ const PRESET_CONFIG: Record<WeatherFxProfileName, {
   },
 };
 
+// Zone type hues (matching WEATHER_TYPE_COLOR_PROFILE in WorldView.ts)
+const ZONE_TYPE_HUE: Record<'mist' | 'echo' | 'ion', number> = {
+  mist: 34,
+  echo: 341,
+  ion: 122,
+};
+
 // ── Per-zone param definitions ─────────────────────────────────────────────────
 
 type ParamDef = { label: string; key: string; min: number; max: number };
@@ -223,30 +242,30 @@ const ZONE_PARAMS: Record<'mist' | 'echo' | 'ion', ParamDef[]> = {
   mist: [
     { label: 'Wet', key: 'zoneTypeFxBias.mist.wetLevel', min: 0.3, max: 2.5 },
     { label: 'Reverb', key: 'zoneTypeFxBias.mist.reverbRoomSize', min: 0.3, max: 2.5 },
-    { label: 'Delay', key: 'zoneTypeFxBias.mist.delayTimeSec', min: 0.3, max: 2.5 },
-    { label: 'Low Pass', key: 'zoneTypeFxBias.mist.lowpassHz', min: 0.3, max: 2.0 },
-    { label: 'Bandpass', key: 'zoneTypeFxBias.mist.bandpassMix', min: 0.1, max: 2.5 },
+    { label: 'Dly Time', key: 'zoneTypeFxBias.mist.delayTimeSec', min: 0.3, max: 2.5 },
+    { label: 'LP Cutoff', key: 'zoneTypeFxBias.mist.lowpassHz', min: 0.3, max: 2.0 },
+    { label: 'BP Mix', key: 'zoneTypeFxBias.mist.bandpassMix', min: 0.1, max: 2.5 },
   ],
   echo: [
     { label: 'Wet', key: 'zoneTypeFxBias.echo.wetLevel', min: 0.3, max: 2.5 },
-    { label: 'Delay', key: 'zoneTypeFxBias.echo.delayTimeSec', min: 0.3, max: 2.5 },
-    { label: 'Feedback', key: 'zoneTypeFxBias.echo.delayFeedback', min: 0.3, max: 2.5 },
-    { label: 'Echo Mix', key: 'zoneTypeFxBias.echo.delayWet', min: 0.3, max: 2.5 },
+    { label: 'Dly Time', key: 'zoneTypeFxBias.echo.delayTimeSec', min: 0.3, max: 2.5 },
+    { label: 'Dly Fdbk', key: 'zoneTypeFxBias.echo.delayFeedback', min: 0.3, max: 2.5 },
+    { label: 'Dly Wet', key: 'zoneTypeFxBias.echo.delayWet', min: 0.3, max: 2.5 },
     { label: 'Reverb', key: 'zoneTypeFxBias.echo.reverbRoomSize', min: 0.3, max: 2.5 },
   ],
   ion: [
     { label: 'Wet', key: 'zoneTypeFxBias.ion.wetLevel', min: 0.3, max: 2.5 },
-    { label: 'Bandpass', key: 'zoneTypeFxBias.ion.bandpassMix', min: 0.1, max: 3.0 },
-    { label: 'Resonance', key: 'zoneTypeFxBias.ion.bandpassQ', min: 0.1, max: 3.0 },
-    { label: 'Sweep Hz', key: 'zoneTypeFxBias.ion.bandpassSweepHz', min: 0.1, max: 3.0 },
-    { label: 'High Pass', key: 'zoneTypeFxBias.ion.highpassHz', min: 0.3, max: 2.5 },
+    { label: 'BP Mix', key: 'zoneTypeFxBias.ion.bandpassMix', min: 0.1, max: 3.0 },
+    { label: 'BP Q', key: 'zoneTypeFxBias.ion.bandpassQ', min: 0.1, max: 3.0 },
+    { label: 'BP LFO', key: 'zoneTypeFxBias.ion.bandpassSweepHz', min: 0.1, max: 3.0 },
+    { label: 'HP Cutoff', key: 'zoneTypeFxBias.ion.highpassHz', min: 0.3, max: 2.5 },
   ],
 };
 
 const GLOBAL_PARAMS: ParamDef[] = [
-  { label: 'FX Strength', key: 'globalBlendAmount', min: 0.5, max: 2.5 },
+  { label: 'FX Send', key: 'globalBlendAmount', min: 0.5, max: 2.5 },
   { label: 'Reverb ×', key: 'fxMultiplier.reverbRoomSize', min: 0.3, max: 3.0 },
-  { label: 'Delay ×', key: 'fxMultiplier.delayFeedback', min: 0.3, max: 3.0 },
+  { label: 'Dly Fdbk ×', key: 'fxMultiplier.delayFeedback', min: 0.3, max: 3.0 },
 ];
 
 // ── Tuning value reader ────────────────────────────────────────────────────────
@@ -275,6 +294,8 @@ export class WeatherEditor {
   private open = false;
   private currentProfile: WeatherFxProfileName = 'experimental';
   private selectedZone: 'mist' | 'echo' | 'ion' = 'mist';
+  private playerZones: PlayerZoneInfo[] = [];
+  private selectedZoneId: string | null = null;
   private getTuning: () => WeatherEffectTuning;
 
   constructor(
@@ -286,6 +307,19 @@ export class WeatherEditor {
     this.container = container;
     this.getTuning = getTuning;
     this.callbacks = callbacks;
+  }
+
+  setPlayerZones(zones: PlayerZoneInfo[]): void {
+    this.playerZones = zones;
+    if (zones.length > 0) {
+      const nearest = zones[0]!;
+      this.selectedZoneId = nearest.id;
+      this.selectedZone = nearest.type;
+    }
+  }
+
+  getSelectedZoneId(): string | null {
+    return this.selectedZoneId;
   }
 
   toggle(): void {
@@ -407,20 +441,43 @@ export class WeatherEditor {
       echo: '⌁ Echo',
       ion: '⚡ Ion',
     };
+    const availableTypes = new Set(this.playerZones.map(z => z.type));
+
     for (const zone of ['mist', 'echo', 'ion'] as const) {
       const pill = document.createElement('button');
       pill.className = 'we-zone-pill';
-      if (zone === this.selectedZone) pill.classList.add('we-zone-active');
-      pill.textContent = ZONE_LABELS[zone];
-      pill.addEventListener('click', () => {
-        this.selectedZone = zone;
-        this.renderZoneParams(zoneParamsSection, tuning);
-        // Update pill active state
-        for (const p of Array.from(pillsRow.querySelectorAll('.we-zone-pill'))) {
-          p.classList.remove('we-zone-active');
-        }
+      const isAvailable = availableTypes.has(zone);
+      const isActive = zone === this.selectedZone;
+      const hue = ZONE_TYPE_HUE[zone];
+
+      if (!isAvailable) {
+        pill.classList.add('we-zone-disabled');
+      }
+
+      // Zone-type coloring
+      pill.style.borderColor = isActive
+        ? `hsl(${hue}, 72%, 55%)`
+        : `hsl(${hue}, 40%, 32%)`;
+      pill.style.color = isActive
+        ? `hsl(${hue}, 85%, 78%)`
+        : `hsl(${hue}, 45%, 58%)`;
+
+      if (isActive) {
         pill.classList.add('we-zone-active');
-      });
+        pill.style.boxShadow = `0 0 10px hsla(${hue}, 70%, 50%, 0.35)`;
+      }
+
+      pill.textContent = ZONE_LABELS[zone];
+
+      if (isAvailable) {
+        pill.addEventListener('click', () => {
+          const zoneOfType = this.playerZones.find(z => z.type === zone);
+          if (zoneOfType) this.selectedZoneId = zoneOfType.id;
+          this.selectedZone = zone;
+          this.render();
+        });
+      }
+
       pillsRow.appendChild(pill);
     }
     zoneSection.appendChild(pillsRow);
