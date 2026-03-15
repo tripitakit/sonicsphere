@@ -4,6 +4,7 @@ import type {
   SoundSourceState,
   SourceVariation,
   SphericalCoord,
+  UserSourceDef,
 } from '../types.ts';
 import type { Gain } from 'tone';
 import { ARCHETYPES } from '../audio/archetypes.ts';
@@ -61,9 +62,30 @@ export class SphereWorld {
   private lastAdaptAt = 0;
   private soloSourceId: string | null = null;
 
-  constructor() {
-    this.sources = this.generateSources();
+  constructor(externalSources?: SoundSourceState[]) {
+    this.sources = externalSources
+      ? externalSources.map((s) => new SoundSource(s))
+      : this.generateSources();
     this.sortBuf = this.sources.map((_, i) => ({ idx: i, dist: 0 }));
+  }
+
+  static fromUserSources(defs: UserSourceDef[]): SphereWorld {
+    const archetypeMap = new Map<string, SoundArchetype>();
+    for (const a of ARCHETYPES) archetypeMap.set(a.name, a);
+
+    const states: SoundSourceState[] = defs.map((d) => {
+      const archetype = archetypeMap.get(d.archetypeName);
+      if (!archetype) throw new Error(`Unknown archetype: ${d.archetypeName}`);
+      return {
+        id: d.id,
+        archetype,
+        variation: { ...d.variation },
+        equilibrium: { ...d.position },
+        current: { ...d.position },
+        oscillation: { ...d.oscillation },
+      };
+    });
+    return new SphereWorld(states);
   }
 
   private generateSources(): SoundSource[] {

@@ -22,6 +22,7 @@ import {
 } from './persistence/Storage.ts';
 import { ArchetypeEditor } from './ui/ArchetypeEditor.ts';
 import { WeatherEditor } from './ui/WeatherEditor.ts';
+import { WorldCreator } from './ui/WorldCreator.ts';
 import { ARCHETYPES } from './audio/archetypes.ts';
 import type { PlayerState, SoundArchetype } from './types.ts';
 
@@ -85,6 +86,7 @@ async function bootstrap(): Promise<void> {
   const editorContainer = document.getElementById('archetype-editor') as HTMLDivElement;
   const editorTrigger   = document.getElementById('archetype-editor-trigger') as HTMLButtonElement | null;
   const weatherEditorContainer = document.getElementById('weather-editor') as HTMLDivElement;
+  const worldCreatorContainer = document.getElementById('world-creator') as HTMLDivElement;
 
   // Snapshot original archetype defaults BEFORE applying any persisted overrides,
   // so the reset function can restore the pristine values.
@@ -108,8 +110,8 @@ async function bootstrap(): Promise<void> {
     : randomInitialPlayerState();
   const player = new Player(playerInitial);
 
-  const world     = new SphereWorld();
-  const weather   = new WeatherZoneEngine();
+  let world     = new SphereWorld();
+  let weather   = new WeatherZoneEngine();
   const input     = new KeyboardInput();
   const autopilot = new Autopilot(
     resolveInitialTargetHeading(playerInitial.heading, persisted),
@@ -217,6 +219,51 @@ async function bootstrap(): Promise<void> {
     applyWeatherTuningParam(getTuning(), key, val);
   }
 
+  // ── Create World mode ─────────────────────────────────────────────────────
+  let createMode = false;
+
+  const worldCreator = new WorldCreator(
+    worldCreatorContainer,
+    {
+      onPlacementModeChange: () => { /* cursor hint could go here */ },
+      onWorldChanged: () => { /* preview updates happen via builder in render loop */ },
+      onPlay: () => { exitCreateMode(true); },
+    },
+  );
+
+  function enterCreateMode(): void {
+    if (createMode) return;
+    createMode = true;
+    // Close other editors
+    if (archetypeEditor.isOpen()) toggleArchetypeEditor();
+    if (weatherEditor.isOpen()) toggleWeatherEditor();
+    // Stop audio but don't show pause overlay
+    world.suspendAllVoices();
+    void audio.stop();
+    overlay.classList.add('hidden');
+    worldCreator.toggle();
+  }
+
+  function exitCreateMode(play: boolean): void {
+    if (!createMode) return;
+    createMode = false;
+    worldCreator.close();
+    if (play) {
+      const builder = worldCreator.getBuilder();
+      if (!builder.isEmpty()) {
+        // Hot-swap world and weather from user definitions
+        world.dispose();
+        world = SphereWorld.fromUserSources(builder.getSources().map(s => ({ ...s })));
+        weather = WeatherZoneEngine.fromUserZones(builder.getZones().map(z => ({ ...z })));
+        latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
+      }
+      void resumeExperience();
+    } else {
+      // ESC from create mode → show paused overlay
+      setOverlay('paused');
+    }
+  }
+
   let paused = true;
   let transitionInFlight = false;
   let lastSaveWorldElapsed = 0;
@@ -297,11 +344,29 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  // Canvas click/tap → select editable source in edit mode, otherwise set steering direction
+  // Canvas click/tap → create-mode placement / source selection / steering direction
   renderer.app.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
-    if (paused) return;
     // Any PixiJS canvas button sets this flag synchronously before this handler fires
     if (pixiBtnConsumed) { pixiBtnConsumed = false; return; }
+
+    // Create mode: place sources/zones on sphere
+    if (createMode) {
+      if (!worldCreator.isPlacementActive()) return;
+      e.preventDefault();
+      const rect   = renderer.app.canvas.getBoundingClientRect();
+      const scaleX = renderer.width  / rect.width;
+      const scaleY = renderer.height / rect.height;
+      const px = (e.clientX - rect.left) * scaleX;
+      const py = (e.clientY - rect.top)  * scaleY;
+      const pos = worldView.pickSpherePosition(
+        px, py, renderer.width, renderer.height,
+        player.getPosition(), player.getHeading(),
+      );
+      if (pos) worldCreator.handleSphereClick(pos);
+      return;
+    }
+
+    if (paused) return;
     e.preventDefault();
     const rect   = renderer.app.canvas.getBoundingClientRect();
     const scaleX = renderer.width  / rect.width;
@@ -332,21 +397,29 @@ async function bootstrap(): Promise<void> {
 
   setOverlay('start');
 
-  // E toggles archetype editor, Z toggles weather zone editor, ESC toggles pause/resume.
+  // E toggles archetype editor, Z toggles weather zone editor,
+  // C toggles create mode, ESC toggles pause/resume.
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') {
       e.preventDefault();
+      if (createMode) { exitCreateMode(false); return; }
       if (paused) void resumeExperience();
       else void pauseExperience();
       return;
     }
 
-    if (e.code === 'KeyE') {
+    if (e.code === 'KeyC' && !createMode && !paused) {
+      e.preventDefault();
+      enterCreateMode();
+      return;
+    }
+
+    if (e.code === 'KeyE' && !createMode) {
       e.preventDefault();
       toggleArchetypeEditor();
     }
 
-    if (e.code === 'KeyZ') {
+    if (e.code === 'KeyZ' && !createMode) {
       e.preventDefault();
       toggleWeatherEditor();
     }
@@ -379,13 +452,23 @@ async function bootstrap(): Promise<void> {
     lastTime = now;
     const elapsedSecs = worldElapsedSeconds();
 
-    if (paused) {
+    if (paused && !createMode) {
       requestAnimationFrame(tick);
       return;
     }
 
-    if (!archetypeEditor.isOpen() && !weatherEditor.isOpen()) {
+    // Movement — allowed in both listen and create modes (but not when editors block it)
+    if (!createMode && !archetypeEditor.isOpen() && !weatherEditor.isOpen()) {
       autopilot.rotateTargetHeading(input.getRotationIntent(), dt, player.getHeading());
+      autopilot.tick(dt);
+      const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
+      player.update(dt, intent.forward, intent.turn);
+    } else if (createMode) {
+      // In create mode: manual WASD/keyboard navigation only, no autopilot
+      const rotIntent = input.getRotationIntent();
+      if (rotIntent !== 0) {
+        autopilot.rotateTargetHeading(rotIntent, dt, player.getHeading());
+      }
       autopilot.tick(dt);
       const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
       player.update(dt, intent.forward, intent.turn);
@@ -396,28 +479,34 @@ async function bootstrap(): Promise<void> {
     weatherAccumulator += dt;
     renderAccumulator += dt;
 
-    if (worldAccumulator >= worldStepSec) {
-      world.update(
-        elapsedSecs,
-        playerState.position,
-        playerState.heading,
-        audio.masterGain,
-        audio.isStarted(),
-      );
-      worldAccumulator %= worldStepSec;
-      archetypeEditor.setAudibleSources(world.getSourcesInHearingRadius());
-    }
+    // Audio/world updates: skip in create mode
+    if (!createMode) {
+      if (worldAccumulator >= worldStepSec) {
+        world.update(
+          elapsedSecs,
+          playerState.position,
+          playerState.heading,
+          audio.masterGain,
+          audio.isStarted(),
+        );
+        worldAccumulator %= worldStepSec;
+        archetypeEditor.setAudibleSources(world.getSourcesInHearingRadius());
+      }
 
-    if (weatherAccumulator >= weatherStepSec) {
-      latestWeatherFrame = weather.update(elapsedSecs, playerState.position);
-      audio.applyWeatherBlend(latestWeatherFrame.fx);
+      if (weatherAccumulator >= weatherStepSec) {
+        latestWeatherFrame = weather.update(elapsedSecs, playerState.position);
+        audio.applyWeatherBlend(latestWeatherFrame.fx);
+        weatherAccumulator %= weatherStepSec;
+      }
+    } else {
+      worldAccumulator %= worldStepSec;
       weatherAccumulator %= weatherStepSec;
     }
 
     if (renderAccumulator >= renderStepSec) {
       const weatherZonesToRender = weatherEditor.isOpen()
         ? latestWeatherFrame.activeZones.filter(z => z.id === weatherEditor.getSelectedZoneId())
-        : latestWeatherFrame.activeZones;
+        : createMode ? [] : latestWeatherFrame.activeZones;
       worldView.update(
         playerState.position,
         playerState.heading,
@@ -426,8 +515,8 @@ async function bootstrap(): Promise<void> {
         renderer.width,
         renderer.height,
         elapsedSecs,
-        autopilot.getDirectionAngle(playerState.heading),
-        autopilot.getManualOverrideRemainingSec() / MANUAL_OVERRIDE_DURATION_SEC,
+        createMode ? 0 : autopilot.getDirectionAngle(playerState.heading),
+        createMode ? 0 : autopilot.getManualOverrideRemainingSec() / MANUAL_OVERRIDE_DURATION_SEC,
         weatherProfileIdx,
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
@@ -435,8 +524,8 @@ async function bootstrap(): Promise<void> {
       renderAccumulator %= renderStepSec;
     }
 
-    // Save position every 5 seconds
-    if (elapsedSecs - lastSaveWorldElapsed >= 5) {
+    // Save position every 5 seconds (only in listen mode)
+    if (!createMode && elapsedSecs - lastSaveWorldElapsed >= 5) {
       persistNow();
       lastSaveWorldElapsed = elapsedSecs;
     }

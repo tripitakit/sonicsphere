@@ -203,6 +203,7 @@
   <div id="canvas-container"></div>
   <div id="archetype-editor"></div>
   <div id="weather-editor"></div>
+  <div id="world-creator"></div>
   <button id="archetype-editor-trigger" title="Archetype editor (E)" aria-label="Toggle archetype editor">⚙</button>
   <style>
     #archetype-editor-trigger {
@@ -237,6 +238,8 @@
     /* Hide when start/pause overlay is visible */
     #start-overlay:not(.hidden) ~ #archetype-editor-trigger { display: none; }
     #start-overlay:not(.hidden) ~ #weather-editor { display: none !important; }
+    /* Hide archetype trigger when world creator is open */
+    #world-creator.wc-open ~ #archetype-editor-trigger { display: none; }
   </style>
   <script type="module" src="/src/main.ts"></script>
 </body>

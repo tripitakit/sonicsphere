@@ -28,5 +28,10 @@ Thumbs.db
 
 sonicsphere.nginx.conf
 
+# SQLite database
+server/db/*.sqlite
+server/db/*.sqlite-wal
+server/db/*.sqlite-shm
+
 # Local tooling/workspace metadata
 .claude/

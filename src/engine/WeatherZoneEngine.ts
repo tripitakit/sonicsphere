@@ -1,6 +1,7 @@
 import type {
   ActiveWeatherZone,
   SphericalCoord,
+  UserZoneDef,
   WeatherFxBlend,
   WeatherZoneRole,
   WeatherZoneType,
@@ -424,7 +425,7 @@ interface WeatherPresetVariant {
   delayOrganicHz: number;
 }
 
-interface WeatherZoneModel {
+export interface WeatherZoneModel {
   id: string;
   type: WeatherZoneType;
   presetIndex: number;
@@ -717,8 +718,28 @@ export class WeatherZoneEngine {
   private quantizedDelayTimeSec = DEFAULT_WEATHER_FX_BLEND.delayTimeSec;
   private quantizedDelayLastSwitchSec = Number.NEGATIVE_INFINITY;
 
-  constructor(seed = 0x5f3759df, zoneCount = DEFAULT_ZONE_COUNT) {
-    this.zones = this.generateZones(seed, zoneCount);
+  constructor(seed = 0x5f3759df, zoneCount = DEFAULT_ZONE_COUNT, externalZones?: WeatherZoneModel[]) {
+    this.zones = externalZones ?? this.generateZones(seed, zoneCount);
+  }
+
+  static fromUserZones(defs: UserZoneDef[]): WeatherZoneEngine {
+    const TAU_LOCAL = Math.PI * 2;
+    const models: WeatherZoneModel[] = defs.map((d) => ({
+      id: d.id,
+      type: d.type,
+      presetIndex: d.presetIndex,
+      center: { ...d.center },
+      radiusDeg: d.radiusDeg,
+      featherDeg: d.featherDeg,
+      intensity: d.intensity,
+      driftPeriodSec: d.driftEnabled ? 400 + Math.random() * 400 : 1e9,
+      driftLatDeg: d.driftEnabled ? 1.0 + Math.random() * 1.5 : 0,
+      driftLonDeg: d.driftEnabled ? 1.5 + Math.random() * 2.5 : 0,
+      driftPhaseA: Math.random() * TAU_LOCAL,
+      driftPhaseB: Math.random() * TAU_LOCAL,
+      delayPhase: Math.random() * TAU_LOCAL,
+    }));
+    return new WeatherZoneEngine(0, 0, models);
   }
 
   update(elapsedSeconds: number, playerPos: SphericalCoord): WeatherFrame {

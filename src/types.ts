@@ -89,6 +89,53 @@ export interface ActiveWeatherZone {
   influence: number; // 0..1 after zone intensity + distance falloff
 }
 
+// ── Create World types ───────────────────────────────────────────────────────
+
+/** A user-placed sound source definition (serializable). */
+export interface UserSourceDef {
+  id: string;
+  archetypeName: string;
+  position: SphericalCoord;
+  variation: SourceVariation;
+  oscillation: SoundSourceOscillation;
+}
+
+/** A user-placed weather zone definition (serializable). */
+export interface UserZoneDef {
+  id: string;
+  type: WeatherZoneType;
+  presetIndex: number;
+  center: SphericalCoord;
+  radiusDeg: number;
+  featherDeg: number;
+  intensity: number;
+  driftEnabled: boolean;
+}
+
+/** A complete user-created world definition (serializable). */
+export interface WorldDef {
+  id: string;
+  name: string;
+  authorId: string;
+  createdAt: number;
+  updatedAt: number;
+  sources: UserSourceDef[];
+  zones: UserZoneDef[];
+}
+
+/** Lightweight list item returned by GET /api/worlds. */
+export interface WorldSummary {
+  id: string;
+  name: string;
+  authorId: string;
+  createdAt: number;
+  updatedAt: number;
+  sourceCount: number;
+  zoneCount: number;
+}
+
+// ── Weather FX types ─────────────────────────────────────────────────────────
+
 export interface WeatherFxBlend {
   wetLevel: number;           // overall FX return amount
   delayTimeSec: number;       // free/organic delay time (seconds)

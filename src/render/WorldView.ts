@@ -7,6 +7,7 @@ import {
   HEARING_RADIUS,
   SPHERE_RADIUS,
   toCartesian,
+  unprojectScreenDelta,
 } from '../engine/sphereMath.ts';
 
 // How many world units map to 1 pixel on screen.
@@ -505,6 +506,20 @@ export class WorldView {
     if (localX * localX + localZ * localZ <= deadzone * deadzone) return 0;
 
     return normalizeSignedAngle(Math.atan2(localX, -localZ) * RAD);
+  }
+
+  /** Convert canvas pixel to a SphericalCoord on the sphere surface. */
+  pickSpherePosition(
+    px: number,
+    py: number,
+    screenW: number,
+    screenH: number,
+    playerPos: SphericalCoord,
+    playerHeading: number,
+  ): SphericalCoord | null {
+    const localX = (px - screenW / 2) / this.worldScale;
+    const localZ = (py - screenH / 2) / this.worldScale;
+    return unprojectScreenDelta(playerPos, playerHeading, localX, localZ);
   }
 
   pickSourceAt(
