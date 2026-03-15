@@ -10,6 +10,9 @@ export class KeyboardInput {
 
   constructor() {
     window.addEventListener('keydown', (e) => {
+      // Don't capture keys when user is typing in an input or textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const action = KEY_MAP[e.code];
       if (action) {
         e.preventDefault();

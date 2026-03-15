@@ -88,6 +88,7 @@ async function bootstrap(): Promise<void> {
   const editorTrigger   = document.getElementById('archetype-editor-trigger') as HTMLButtonElement | null;
   const weatherEditorContainer = document.getElementById('weather-editor') as HTMLDivElement;
   const worldCreatorContainer = document.getElementById('world-creator') as HTMLDivElement;
+  const editWorldTrigger = document.getElementById('edit-world-trigger') as HTMLButtonElement | null;
 
   // Snapshot original archetype defaults BEFORE applying any persisted overrides,
   // so the reset function can restore the pristine values.
@@ -222,6 +223,7 @@ async function bootstrap(): Promise<void> {
 
   // ── Create World mode ─────────────────────────────────────────────────────
   let createMode = false;
+  let playingUserWorld = false;  // true when listening to a user-created world
   let createNavTarget: { lat: number; lon: number } | null = null;
   const CREATE_NAV_SPEED = 6.0;        // forward multiplier (× PLAYER_SPEED)
   const CREATE_NAV_ARRIVAL = 5;        // chord distance arrival threshold
@@ -289,6 +291,7 @@ async function bootstrap(): Promise<void> {
     createNavTarget = null;
     stopPreview();
     stopPrehear();
+    updateEditWorldButton();
     // Close other editors
     if (archetypeEditor.isOpen()) toggleArchetypeEditor();
     if (weatherEditor.isOpen()) toggleWeatherEditor();
@@ -297,6 +300,10 @@ async function bootstrap(): Promise<void> {
     void audio.stop();
     overlay.classList.add('hidden');
     worldCreator.toggle();
+  }
+
+  function updateEditWorldButton(): void {
+    editWorldTrigger?.classList.toggle('visible', playingUserWorld && !createMode && !paused);
   }
 
   function exitCreateMode(play: boolean): void {
@@ -312,6 +319,7 @@ async function bootstrap(): Promise<void> {
         world = SphereWorld.fromUserSources(builder.getSources().map(s => ({ ...s })));
         weather = WeatherZoneEngine.fromUserZones(builder.getZones().map(z => ({ ...z })));
         latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
+        playingUserWorld = true;
       }
       // paused was set to false in enterCreateMode; reset it so resumeExperience works
       paused = true;
@@ -383,6 +391,7 @@ async function bootstrap(): Promise<void> {
       await audio.start();
       paused = false;
       overlay.classList.add('hidden');
+      updateEditWorldButton();
     } finally {
       transitionInFlight = false;
     }
@@ -394,6 +403,7 @@ async function bootstrap(): Promise<void> {
     paused = true;
     persistNow();
     setOverlay('paused');
+    updateEditWorldButton();
     try {
       await audio.stop();
       world.suspendAllVoices();
@@ -463,13 +473,19 @@ async function bootstrap(): Promise<void> {
   // E toggles archetype editor, Z toggles weather zone editor,
   // C toggles create mode, ESC toggles pause/resume.
   window.addEventListener('keydown', (e) => {
+    // Allow typing in inputs (except ESC which should always work)
+    const tag = (e.target as HTMLElement)?.tagName;
+    const inInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
     if (e.code === 'Escape') {
       e.preventDefault();
-      if (createMode) { exitCreateMode(false); return; }
+      if (createMode) { stopPreview(); stopPrehear(); exitCreateMode(false); return; }
       if (paused) void resumeExperience();
       else void pauseExperience();
       return;
     }
+
+    if (inInput) return;
 
     if (e.code === 'KeyE' && !createMode) {
       e.preventDefault();
@@ -484,6 +500,12 @@ async function bootstrap(): Promise<void> {
 
   editorTrigger?.addEventListener('click', () => {
     toggleArchetypeEditor();
+  });
+
+  editWorldTrigger?.addEventListener('click', () => {
+    if (playingUserWorld && !createMode) {
+      enterCreateMode();
+    }
   });
 
   // Create World button on overlay

@@ -226,6 +226,7 @@
   <div id="weather-editor"></div>
   <div id="world-creator"></div>
   <button id="archetype-editor-trigger" title="Archetype editor (E)" aria-label="Toggle archetype editor">⚙</button>
+  <button id="edit-world-trigger" title="Edit this world" aria-label="Edit world">✎</button>
   <style>
     #archetype-editor-trigger {
       position: fixed;
@@ -256,11 +257,39 @@
       color: #33bbaa;
       box-shadow: 0 0 8px rgba(51, 187, 170, 0.35);
     }
+    /* Edit world button — top-right, same style as archetype trigger */
+    #edit-world-trigger {
+      position: fixed;
+      right: 16px;
+      top: 16px;
+      width: 44px;
+      height: 44px;
+      background: rgba(10, 28, 46, 0.85);
+      border: 1px solid #1d4a6a;
+      border-radius: 50%;
+      color: #5a9ab8;
+      font-size: 19px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 1001;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    #edit-world-trigger:hover {
+      border-color: #33bbaa;
+      color: #33bbaa;
+      background: rgba(13, 40, 60, 0.92);
+    }
+    #edit-world-trigger.visible { display: flex; }
     /* Hide when start/pause overlay is visible */
     #start-overlay:not(.hidden) ~ #archetype-editor-trigger { display: none; }
+    #start-overlay:not(.hidden) ~ #edit-world-trigger { display: none !important; }
     #start-overlay:not(.hidden) ~ #weather-editor { display: none !important; }
-    /* Hide archetype trigger when world creator is open */
+    /* Hide triggers when world creator is open */
     #world-creator.wc-open ~ #archetype-editor-trigger { display: none; }
+    #world-creator.wc-open ~ #edit-world-trigger { display: none !important; }
   </style>
   <script type="module" src="/src/main.ts"></script>
 </body>
