@@ -362,6 +362,10 @@ export class WorldCreator {
       style.textContent = CSS;
       document.head.appendChild(style);
     }
+    // Single delegated click handler — set up ONCE, survives innerHTML rebuilds
+    this.container.addEventListener('click', (e) => this.handleClick(e));
+    // Single delegated input handler for sliders and name input
+    this.container.addEventListener('input', (e) => this.handleInput(e));
   }
 
   isOpen(): boolean { return this.open; }
@@ -545,7 +549,6 @@ export class WorldCreator {
     html += `<div class="wc-status">${sources.length} sources, ${zones.length} zones</div>`;
 
     this.container.innerHTML = html;
-    this.bindEvents();
     // Restore scroll position to prevent jump on re-render
     this.container.scrollTop = scrollTop;
   }
@@ -595,130 +598,129 @@ export class WorldCreator {
     </div>`;
   }
 
-  private bindEvents(): void {
-    this.container.addEventListener('click', (e) => {
-      const target = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
-      if (!target) return;
-      const action = target.dataset.action;
+  private handleClick(e: Event): void {
+    const el = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
+    if (!el) return;
+    const action = el.dataset.action;
 
-      switch (action) {
-        case 'cancel-placement':
-          this.cancelPlacement();
-          this.render();
-          break;
-        case 'save':
-          void this.saveWorld();
-          break;
-        case 'browse':
-          this.browseOpen = !this.browseOpen;
-          if (this.browseOpen) void this.loadBrowseList();
-          else this.render();
-          break;
-        case 'new':
-          this.builder.clear();
-          this.existsOnServer = false;
-          this.selectedSourceId = null;
-          this.selectedZoneId = null;
-          this.cancelPlacement();
-          this.callbacks.onWorldChanged();
-          this.render();
-          break;
-        case 'pick-engine': {
-          const engine = target.dataset.engine as SoundEngineType;
-          this.activeEngine = engine;
-          // Cancel source placement if it was from a different engine
-          const pl = this.placement;
-          if (pl.kind === 'source') {
-            const arch = ARCHETYPES.find(a => a.name === pl.archetypeName);
-            if (arch && (arch.engine ?? 'subtractive') !== engine) {
-              this.cancelPlacement();
-            }
-          }
-          this.render();
-          break;
-        }
-        case 'pick-archetype': {
-          const name = target.dataset.name!;
-          if (this.placement.kind === 'source' && this.placement.archetypeName === name) {
-            this.cancelPlacement();
-          } else {
-            this.placement = { kind: 'source', archetypeName: name };
-            this.lastExclusionWarn = '';
-            this.callbacks.onPlacementModeChange(true);
-          }
-          this.render();
-          break;
-        }
-        case 'pick-zone': {
-          const type = target.dataset.type as WeatherZoneType;
-          if (this.placement.kind === 'zone' && this.placement.zoneType === type) {
-            this.cancelPlacement();
-          } else {
-            this.placement = { kind: 'zone', zoneType: type };
-            this.lastExclusionWarn = '';
-            this.callbacks.onPlacementModeChange(true);
-          }
-          this.render();
-          break;
-        }
-        case 'select-source':
-          this.selectedSourceId = target.dataset.id ?? null;
-          this.render();
-          break;
-        case 'del-source':
-          e.stopPropagation();
-          this.builder.removeSource(target.dataset.id!);
-          if (this.selectedSourceId === target.dataset.id) this.selectedSourceId = null;
-          this.callbacks.onWorldChanged();
-          this.render();
-          break;
-        case 'select-zone':
-          this.selectedZoneId = this.selectedZoneId === target.dataset.id ? null : (target.dataset.id ?? null);
-          this.render();
-          break;
-        case 'del-zone':
-          e.stopPropagation();
-          this.builder.removeZone(target.dataset.id!);
-          if (this.selectedZoneId === target.dataset.id) this.selectedZoneId = null;
-          this.callbacks.onWorldChanged();
-          this.render();
-          break;
-        case 'load-world':
-          void this.loadWorld(target.dataset.id!);
-          break;
-        case 'delete-world':
-          void this.deleteWorld(target.dataset.id!);
-          break;
-        case 'play':
-          this.callbacks.onPlay();
-          break;
-      }
-    });
-
-    // Name input
-    const nameInput = this.container.querySelector('[data-action="name"]') as HTMLInputElement | null;
-    nameInput?.addEventListener('input', () => {
-      this.builder.setWorldName(nameInput.value);
-    });
-
-    // Zone param sliders
-    this.container.querySelectorAll('[data-action="zone-param"]').forEach((el) => {
-      el.addEventListener('input', () => {
-        const input = el as HTMLInputElement;
-        const id = input.dataset.id!;
-        const param = input.dataset.param!;
-        let value = Number(input.value);
-        if (param === 'intensity') value /= 100;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.builder.updateZoneParam(id, param as any, value);
-        const valSpan = input.nextElementSibling as HTMLSpanElement;
-        if (valSpan) {
-          if (param === 'intensity') valSpan.textContent = `${Math.round(value * 100)}%`;
-          else valSpan.textContent = `${value.toFixed(0)}\u00B0`;
-        }
+    switch (action) {
+      case 'cancel-placement':
+        this.cancelPlacement();
+        this.render();
+        break;
+      case 'save':
+        void this.saveWorld();
+        break;
+      case 'browse':
+        this.browseOpen = !this.browseOpen;
+        if (this.browseOpen) void this.loadBrowseList();
+        else this.render();
+        break;
+      case 'new':
+        this.builder.clear();
+        this.existsOnServer = false;
+        this.selectedSourceId = null;
+        this.selectedZoneId = null;
+        this.cancelPlacement();
         this.callbacks.onWorldChanged();
-      });
-    });
+        this.render();
+        break;
+      case 'pick-engine': {
+        const engine = el.dataset.engine as SoundEngineType;
+        this.activeEngine = engine;
+        const pl = this.placement;
+        if (pl.kind === 'source') {
+          const arch = ARCHETYPES.find(a => a.name === pl.archetypeName);
+          if (arch && (arch.engine ?? 'subtractive') !== engine) {
+            this.cancelPlacement();
+          }
+        }
+        this.render();
+        break;
+      }
+      case 'pick-archetype': {
+        const name = el.dataset.name!;
+        if (this.placement.kind === 'source' && this.placement.archetypeName === name) {
+          this.cancelPlacement();
+        } else {
+          this.placement = { kind: 'source', archetypeName: name };
+          this.lastExclusionWarn = '';
+          this.callbacks.onPlacementModeChange(true);
+        }
+        this.render();
+        break;
+      }
+      case 'pick-zone': {
+        const type = el.dataset.type as WeatherZoneType;
+        if (this.placement.kind === 'zone' && this.placement.zoneType === type) {
+          this.cancelPlacement();
+        } else {
+          this.placement = { kind: 'zone', zoneType: type };
+          this.lastExclusionWarn = '';
+          this.callbacks.onPlacementModeChange(true);
+        }
+        this.render();
+        break;
+      }
+      case 'select-source':
+        this.selectedSourceId = el.dataset.id ?? null;
+        this.render();
+        break;
+      case 'del-source':
+        e.stopPropagation();
+        this.builder.removeSource(el.dataset.id!);
+        if (this.selectedSourceId === el.dataset.id) this.selectedSourceId = null;
+        this.callbacks.onWorldChanged();
+        this.render();
+        break;
+      case 'select-zone':
+        this.selectedZoneId = this.selectedZoneId === el.dataset.id ? null : (el.dataset.id ?? null);
+        this.render();
+        break;
+      case 'del-zone':
+        e.stopPropagation();
+        this.builder.removeZone(el.dataset.id!);
+        if (this.selectedZoneId === el.dataset.id) this.selectedZoneId = null;
+        this.callbacks.onWorldChanged();
+        this.render();
+        break;
+      case 'load-world':
+        void this.loadWorld(el.dataset.id!);
+        break;
+      case 'delete-world':
+        void this.deleteWorld(el.dataset.id!);
+        break;
+      case 'play':
+        this.callbacks.onPlay();
+        break;
+    }
+  }
+
+  private handleInput(e: Event): void {
+    const el = e.target as HTMLElement;
+    const action = el.dataset.action;
+    if (!action) return;
+
+    if (action === 'name') {
+      this.builder.setWorldName((el as HTMLInputElement).value);
+      return;
+    }
+
+    if (action === 'zone-param') {
+      const input = el as HTMLInputElement;
+      const id = input.dataset.id!;
+      const param = input.dataset.param!;
+      let value = Number(input.value);
+      if (param === 'intensity') value /= 100;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.builder.updateZoneParam(id, param as any, value);
+      const valSpan = input.nextElementSibling as HTMLSpanElement;
+      if (valSpan) {
+        if (param === 'intensity') valSpan.textContent = `${Math.round(value * 100)}%`;
+        else valSpan.textContent = `${value.toFixed(0)}\u00B0`;
+      }
+      this.callbacks.onWorldChanged();
+    }
   }
 
   private async saveWorld(): Promise<void> {
