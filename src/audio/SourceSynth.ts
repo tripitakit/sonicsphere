@@ -81,7 +81,7 @@ export class SourceSynth {
     } else if (engine === 'resonator') {
       this.mainSource = new Tone.Noise(noiseType(archetype.noiseColor ?? 'white'));
       const resonatorHz = Math.max(40, archetype.resonatorHz ?? tunedFreq);
-      const delayTime = clamp(1 / resonatorHz, 0.003, 0.05);
+      const delayTime = clamp(1 / resonatorHz, 0.001, 0.05);
       const resonance = clamp(archetype.resonatorFeedback ?? 0.76, 0.05, 0.96);
       this.resonatorComb = new Tone.FeedbackCombFilter({
         delayTime,
@@ -365,7 +365,7 @@ export class SourceSynth {
       case 'resonatorHz':
         if (this.resonatorComb) {
           const hz = Math.max(40, Number(value));
-          this.resonatorComb.delayTime.value = clamp(1 / hz, 0.003, 0.05);
+          this.resonatorComb.delayTime.value = clamp(1 / hz, 0.001, 0.05);
         }
         break;
       case 'resonatorFeedback':

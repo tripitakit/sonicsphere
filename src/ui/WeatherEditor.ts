@@ -1,6 +1,6 @@
 import type { WeatherEffectTuning, WeatherFxProfileName } from '../engine/WeatherZoneEngine.ts';
 import type { WeatherZoneType } from '../types.ts';
-import { WEATHER_EFFECT_PRESETS, WEATHER_FX_PROFILE_NAMES } from '../engine/WeatherZoneEngine.ts';
+import { WEATHER_FX_PROFILE_NAMES } from '../engine/WeatherZoneEngine.ts';
 
 export interface PlayerZoneInfo {
   id: string;
@@ -240,32 +240,32 @@ type ParamDef = { label: string; key: string; min: number; max: number };
 
 const ZONE_PARAMS: Record<'mist' | 'echo' | 'ion', ParamDef[]> = {
   mist: [
-    { label: 'Wet', key: 'zoneTypeFxBias.mist.wetLevel', min: 0.3, max: 2.5 },
-    { label: 'Reverb', key: 'zoneTypeFxBias.mist.reverbRoomSize', min: 0.3, max: 2.5 },
-    { label: 'Dly Time', key: 'zoneTypeFxBias.mist.delayTimeSec', min: 0.3, max: 2.5 },
-    { label: 'LP Cutoff', key: 'zoneTypeFxBias.mist.lowpassHz', min: 0.3, max: 2.0 },
-    { label: 'BP Mix', key: 'zoneTypeFxBias.mist.bandpassMix', min: 0.1, max: 2.5 },
+    { label: 'Wet', key: 'zoneTypeFxBias.mist.wetLevel', min: 0.1, max: 3.0 },
+    { label: 'Reverb', key: 'zoneTypeFxBias.mist.reverbRoomSize', min: 0.1, max: 3.0 },
+    { label: 'Dly Time', key: 'zoneTypeFxBias.mist.delayTimeSec', min: 0.1, max: 3.0 },
+    { label: 'LP Cutoff', key: 'zoneTypeFxBias.mist.lowpassHz', min: 0.1, max: 3.0 },
+    { label: 'BP Mix', key: 'zoneTypeFxBias.mist.bandpassMix', min: 0.05, max: 3.5 },
   ],
   echo: [
-    { label: 'Wet', key: 'zoneTypeFxBias.echo.wetLevel', min: 0.3, max: 2.5 },
-    { label: 'Dly Time', key: 'zoneTypeFxBias.echo.delayTimeSec', min: 0.3, max: 2.5 },
-    { label: 'Dly Fdbk', key: 'zoneTypeFxBias.echo.delayFeedback', min: 0.3, max: 2.5 },
-    { label: 'Dly Wet', key: 'zoneTypeFxBias.echo.delayWet', min: 0.3, max: 2.5 },
-    { label: 'Reverb', key: 'zoneTypeFxBias.echo.reverbRoomSize', min: 0.3, max: 2.5 },
+    { label: 'Wet', key: 'zoneTypeFxBias.echo.wetLevel', min: 0.1, max: 3.0 },
+    { label: 'Dly Time', key: 'zoneTypeFxBias.echo.delayTimeSec', min: 0.1, max: 3.0 },
+    { label: 'Dly Fdbk', key: 'zoneTypeFxBias.echo.delayFeedback', min: 0.1, max: 3.0 },
+    { label: 'Dly Wet', key: 'zoneTypeFxBias.echo.delayWet', min: 0.1, max: 3.0 },
+    { label: 'Reverb', key: 'zoneTypeFxBias.echo.reverbRoomSize', min: 0.1, max: 3.0 },
   ],
   ion: [
-    { label: 'Wet', key: 'zoneTypeFxBias.ion.wetLevel', min: 0.3, max: 2.5 },
-    { label: 'BP Mix', key: 'zoneTypeFxBias.ion.bandpassMix', min: 0.1, max: 3.0 },
-    { label: 'BP Q', key: 'zoneTypeFxBias.ion.bandpassQ', min: 0.1, max: 3.0 },
-    { label: 'BP LFO', key: 'zoneTypeFxBias.ion.bandpassSweepHz', min: 0.1, max: 3.0 },
-    { label: 'HP Cutoff', key: 'zoneTypeFxBias.ion.highpassHz', min: 0.3, max: 2.5 },
+    { label: 'Wet', key: 'zoneTypeFxBias.ion.wetLevel', min: 0.1, max: 3.0 },
+    { label: 'BP Mix', key: 'zoneTypeFxBias.ion.bandpassMix', min: 0.05, max: 3.5 },
+    { label: 'BP Q', key: 'zoneTypeFxBias.ion.bandpassQ', min: 0.05, max: 4.0 },
+    { label: 'BP LFO', key: 'zoneTypeFxBias.ion.bandpassSweepHz', min: 0.05, max: 5.0 },
+    { label: 'HP Cutoff', key: 'zoneTypeFxBias.ion.highpassHz', min: 0.1, max: 3.5 },
   ],
 };
 
 const GLOBAL_PARAMS: ParamDef[] = [
-  { label: 'FX Send', key: 'globalBlendAmount', min: 0.5, max: 2.5 },
-  { label: 'Reverb ×', key: 'fxMultiplier.reverbRoomSize', min: 0.3, max: 3.0 },
-  { label: 'Dly Fdbk ×', key: 'fxMultiplier.delayFeedback', min: 0.3, max: 3.0 },
+  { label: 'FX Send', key: 'globalBlendAmount', min: 0.2, max: 3.0 },
+  { label: 'Reverb ×', key: 'fxMultiplier.reverbRoomSize', min: 0.1, max: 3.5 },
+  { label: 'Dly Fdbk ×', key: 'fxMultiplier.delayFeedback', min: 0.1, max: 3.5 },
 ];
 
 // ── Tuning value reader ────────────────────────────────────────────────────────

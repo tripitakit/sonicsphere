@@ -370,7 +370,7 @@ export class ArchetypeEditor {
     editor.appendChild(this.sectionLabel('Base'));
 
     if (engine !== 'noise' && engine !== 'resonator') {
-      editor.appendChild(this.logSliderRow('Freq', 'frequency', arch.frequency, 16, 8000, 'Hz', arch.name));
+      editor.appendChild(this.logSliderRow('Freq', 'frequency', arch.frequency, 16, 12000, 'Hz', arch.name));
     }
     if (engine === 'subtractive' || engine === 'fm') {
       editor.appendChild(this.toggleRow('Wave', 'waveform', arch.waveform,
@@ -381,20 +381,20 @@ export class ArchetypeEditor {
     editor.appendChild(this.sectionLabel('Env / LFO'));
     editor.appendChild(this.linSliderRow('Sustain', 'sustain', arch.sustain, 0, 1, '', arch.name));
     editor.appendChild(this.logSliderRow('LFO Rate', 'lfoRate', arch.lfoRate, 0.01, 20, 'Hz', arch.name));
-    editor.appendChild(this.linSliderRow('LFO Depth', 'lfoDepth', arch.lfoDepth, 0, 150, '', arch.name));
+    editor.appendChild(this.linSliderRow('LFO Depth', 'lfoDepth', arch.lfoDepth, 0, 200, '', arch.name));
 
     // ── FILTER ──
     editor.appendChild(this.sectionLabel('Filter'));
-    editor.appendChild(this.logSliderRow('Cutoff', 'filter.freq', arch.filter.freq, 40, 14000, 'Hz', arch.name));
-    editor.appendChild(this.linSliderRow('Q', 'filter.Q', arch.filter.Q, 0.1, 15, '', arch.name));
+    editor.appendChild(this.logSliderRow('Cutoff', 'filter.freq', arch.filter.freq, 20, 18000, 'Hz', arch.name));
+    editor.appendChild(this.linSliderRow('Q', 'filter.Q', arch.filter.Q, 0.1, 25, '', arch.name));
 
     // ── ENGINE-SPECIFIC ──
     if (engine === 'fm') {
       editor.appendChild(this.sectionLabel('FM'));
       editor.appendChild(this.logSliderRow('Ratio', 'fmHarmonicity',
-        arch.fmHarmonicity ?? 1.8, 0.2, 12, '', arch.name));
+        arch.fmHarmonicity ?? 1.8, 0.1, 20, '', arch.name));
       editor.appendChild(this.linSliderRow('Mod Idx', 'fmModulationIndex',
-        arch.fmModulationIndex ?? 3.2, 0.2, 40, '', arch.name));
+        arch.fmModulationIndex ?? 3.2, 0.1, 60, '', arch.name));
       editor.appendChild(this.toggleRow('Mod Wave', 'fmModulationType',
         arch.fmModulationType ?? 'sine',
         ['sine', 'triangle', 'square', 'sawtooth'], arch.name));
@@ -410,9 +410,9 @@ export class ArchetypeEditor {
     if (engine === 'resonator') {
       editor.appendChild(this.sectionLabel('Resonator'));
       editor.appendChild(this.logSliderRow('Pitch', 'resonatorHz',
-        arch.resonatorHz ?? 200, 40, 2000, 'Hz', arch.name));
+        arch.resonatorHz ?? 200, 20, 1000, 'Hz', arch.name));
       editor.appendChild(this.linSliderRow('Feedback', 'resonatorFeedback',
-        arch.resonatorFeedback ?? 0.76, 0.05, 0.96, '', arch.name));
+        arch.resonatorFeedback ?? 0.76, 0.02, 0.98, '', arch.name));
     }
 
     this.container.appendChild(editor);
