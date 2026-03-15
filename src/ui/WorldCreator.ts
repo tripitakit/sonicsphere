@@ -25,11 +25,13 @@ const ENGINE_TABS: { engine: SoundEngineType; label: string; color: string; bord
   { engine: 'resonator',   label: 'Resonator', color: '#7fb8a4', border: '#33aa88', bg: 'rgba(20,60,45,0.5)' },
 ];
 
-function archetypesByEngine(engine: SoundEngineType): string[] {
-  return ARCHETYPES
-    .filter(a => (a.engine ?? 'subtractive') === engine)
-    .map(a => a.name);
-}
+/** Pre-computed archetype names per engine, sorted alphabetically. */
+const ARCHETYPES_BY_ENGINE: Record<SoundEngineType, string[]> = {
+  subtractive: ARCHETYPES.filter(a => (a.engine ?? 'subtractive') === 'subtractive').map(a => a.name).sort(),
+  noise: ARCHETYPES.filter(a => a.engine === 'noise').map(a => a.name).sort(),
+  fm: ARCHETYPES.filter(a => a.engine === 'fm').map(a => a.name).sort(),
+  resonator: ARCHETYPES.filter(a => a.engine === 'resonator').map(a => a.name).sort(),
+};
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -51,7 +53,7 @@ const CSS = `
   top: 10px;
   left: 10px;
   width: 510px;
-  max-height: 94vh;
+  height: calc(100vh - 20px);
   overflow-y: auto;
   background: rgba(8, 22, 38, 0.94);
   border: 1px solid #1a3a55;
@@ -62,14 +64,21 @@ const CSS = `
   z-index: 1000;
   display: none;
   box-shadow: 0 5px 32px rgba(0,0,0,0.7);
+  flex-direction: column;
 }
-#world-creator.wc-open { display: block; }
+#world-creator.wc-open { display: flex; }
 
 .wc-section {
   padding: 14px 18px;
   border-bottom: 1px solid #1a3a55;
+  flex-shrink: 0;
 }
 .wc-section:last-child { border-bottom: none; }
+.wc-section-sources {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
 
 .wc-section-title {
   font-size: 12px;
@@ -155,8 +164,7 @@ const CSS = `
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
-  max-height: 180px;
-  overflow-y: auto;
+  align-content: flex-start;
 }
 .wc-arch-item {
   padding: 6px 12px;
@@ -415,6 +423,8 @@ export class WorldCreator {
   }
 
   private render(): void {
+    // Preserve scroll position across re-renders
+    const scrollTop = this.container.scrollTop;
     let html = '';
 
     // Placement banner
@@ -449,8 +459,8 @@ export class WorldCreator {
       html += this.renderBrowsePanel();
     }
 
-    // Sources section with engine tabs
-    html += `<div class="wc-section">
+    // Sources section with engine tabs (flex-grow to fill)
+    html += `<div class="wc-section wc-section-sources">
       <div class="wc-section-title">Sources (${this.builder.getSources().length})</div>
       <div class="wc-engine-tabs">`;
     for (const tab of ENGINE_TABS) {
@@ -459,8 +469,8 @@ export class WorldCreator {
     }
     html += `</div>`;
 
-    // Show archetypes for selected engine tab
-    const archNames = archetypesByEngine(this.activeEngine);
+    // Show archetypes for selected engine tab (pre-sorted alphabetically)
+    const archNames = ARCHETYPES_BY_ENGINE[this.activeEngine];
     if (archNames.length > 0) {
       html += `<div class="wc-arch-list">`;
       for (const archName of archNames) {
@@ -536,6 +546,8 @@ export class WorldCreator {
 
     this.container.innerHTML = html;
     this.bindEvents();
+    // Restore scroll position to prevent jump on re-render
+    this.container.scrollTop = scrollTop;
   }
 
   private renderBrowsePanel(): string {

@@ -275,6 +275,7 @@ export class WorldView {
   private archetypePaletteCache = new Map<string, ArchetypePalette>();
   private weatherPaletteCache = new Map<string, WeatherPatchPalette>();
   private playerDot: PIXI.Graphics;
+  private navTarget: PIXI.Graphics;
   private topCompass: PIXI.Graphics;
   private worldHorizon: PIXI.Graphics;
   private horizons: PIXI.Graphics;
@@ -360,6 +361,9 @@ export class WorldView {
 
     this.playerDot = new PIXI.Graphics();
     stage.addChild(this.playerDot);
+
+    this.navTarget = new PIXI.Graphics();
+    stage.addChild(this.navTarget);
   }
 
   update(
@@ -516,6 +520,46 @@ export class WorldView {
     for (const [id, g] of this.sourceGraphics) {
       if (!visible.has(id)) g.visible = false;
     }
+  }
+
+  /**
+   * Draw a navigation target marker (pulsing circle + cross) at a sphere position.
+   * Called from main.ts in create mode when the player is navigating toward a click target.
+   */
+  drawNavTarget(
+    playerPos: SphericalCoord,
+    playerHeading: number,
+    targetPos: SphericalCoord,
+    elapsed: number,
+  ): void {
+    this.navTarget.clear();
+    const screen = this.project(playerPos, playerHeading, targetPos);
+
+    const pulse = 0.7 + 0.3 * Math.sin(elapsed * 3.2);
+    const r = 8;
+    const crossLen = 5;
+    const color = 0x33bbaa;
+
+    // Outer ring
+    this.navTarget.circle(screen.x, screen.y, r * (0.95 + 0.05 * pulse))
+      .stroke({ color, alpha: 0.35 * pulse, width: 1.8 });
+    // Inner ring
+    this.navTarget.circle(screen.x, screen.y, r * 0.55)
+      .stroke({ color, alpha: 0.55 * pulse, width: 1.2 });
+    // Cross
+    this.navTarget
+      .moveTo(screen.x - crossLen, screen.y)
+      .lineTo(screen.x + crossLen, screen.y)
+      .stroke({ color, alpha: 0.6 * pulse, width: 1.2 });
+    this.navTarget
+      .moveTo(screen.x, screen.y - crossLen)
+      .lineTo(screen.x, screen.y + crossLen)
+      .stroke({ color, alpha: 0.6 * pulse, width: 1.2 });
+  }
+
+  /** Hide the nav target marker (call when there's no active target). */
+  clearNavTarget(): void {
+    this.navTarget.clear();
   }
 
   /**

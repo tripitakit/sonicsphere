@@ -224,6 +224,7 @@ async function bootstrap(): Promise<void> {
   let createNavTarget: { lat: number; lon: number } | null = null;
   const CREATE_NAV_SPEED = 6.0;        // forward multiplier (× PLAYER_SPEED)
   const CREATE_NAV_ARRIVAL = 5;        // chord distance arrival threshold
+  const CREATE_NAV_ALIGN_DEG = 8;      // heading error threshold to start moving
 
   const worldCreator = new WorldCreator(
     worldCreatorContainer,
@@ -475,7 +476,7 @@ async function bootstrap(): Promise<void> {
       const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
       player.update(dt, intent.forward, intent.turn);
     } else if (createMode) {
-      // In create mode: click-to-navigate at speed 6 toward target
+      // In create mode: rotate toward target first, then move linearly
       if (createNavTarget) {
         const dist = chordDistance(player.getPosition(), createNavTarget);
         if (dist < CREATE_NAV_ARRIVAL) {
@@ -484,8 +485,16 @@ async function bootstrap(): Promise<void> {
         } else {
           const bearing = bearingDeg(player.getPosition(), createNavTarget);
           const headingError = ((bearing - player.getHeading()) + 540) % 360 - 180;
-          const turn = Math.max(-1, Math.min(1, headingError / 30));
-          player.update(dt, CREATE_NAV_SPEED, turn);
+          const absError = Math.abs(headingError);
+          if (absError > CREATE_NAV_ALIGN_DEG) {
+            // Phase 1: rotate in place toward target
+            const turn = Math.max(-1, Math.min(1, headingError / 20));
+            player.update(dt, 0, turn);
+          } else {
+            // Phase 2: move linearly with minor course corrections
+            const turn = Math.max(-1, Math.min(1, headingError / 30));
+            player.update(dt, CREATE_NAV_SPEED, turn);
+          }
         }
       } else {
         player.update(dt, 0, 0);
@@ -549,7 +558,7 @@ async function bootstrap(): Promise<void> {
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
       );
-      // In create mode, draw preview glyphs for builder-placed sources
+      // In create mode, draw preview glyphs and nav target
       if (createMode) {
         worldView.drawPreviewSources(
           playerState.position,
@@ -557,6 +566,18 @@ async function bootstrap(): Promise<void> {
           worldCreator.getBuilder().getSources(),
           elapsedSecs,
         );
+        if (createNavTarget) {
+          worldView.drawNavTarget(
+            playerState.position,
+            playerState.heading,
+            createNavTarget,
+            elapsedSecs,
+          );
+        } else {
+          worldView.clearNavTarget();
+        }
+      } else {
+        worldView.clearNavTarget();
       }
       renderAccumulator %= renderStepSec;
     }
