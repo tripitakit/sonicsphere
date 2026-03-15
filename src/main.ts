@@ -24,7 +24,8 @@ import { ArchetypeEditor } from './ui/ArchetypeEditor.ts';
 import { WeatherEditor } from './ui/WeatherEditor.ts';
 import { WorldCreator } from './ui/WorldCreator.ts';
 import { ARCHETYPES } from './audio/archetypes.ts';
-import type { PlayerState, SoundArchetype } from './types.ts';
+import type { PlayerState, SoundArchetype, SourceVariation } from './types.ts';
+import { SourceSynth } from './audio/SourceSynth.ts';
 
 /** Apply persisted archetype overrides onto the ARCHETYPES array before world construction. */
 function applyArchetypeOverrides(overrides: ReturnType<typeof loadArchetypeOverrides>): void {
@@ -226,12 +227,58 @@ async function bootstrap(): Promise<void> {
   const CREATE_NAV_ARRIVAL = 5;        // chord distance arrival threshold
   const CREATE_NAV_ALIGN_DEG = 8;      // heading error threshold to start moving
 
+  // ── Archetype preview (3-second audition on selection) ──
+  let previewSynth: SourceSynth | null = null;
+  let previewTimer: ReturnType<typeof setTimeout> | null = null;
+  const defaultVariation: SourceVariation = { detuneCents: 0, filterFreqMult: 1, lfoRateMult: 1 };
+
+  function stopPreview(): void {
+    if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
+    if (previewSynth) { previewSynth.dispose(); previewSynth = null; }
+  }
+
+  async function playArchetypePreview(archetypeName: string): Promise<void> {
+    stopPreview();
+    const archetype = ARCHETYPES.find(a => a.name === archetypeName);
+    if (!archetype) return;
+    // Ensure audio context is running
+    if (!audio.isStarted()) await audio.start();
+    previewSynth = new SourceSynth(archetype, defaultVariation, audio.masterGain);
+    previewSynth.setDistanceGain(0.5);
+    previewSynth.setPosition(0, 0, -1); // center
+    previewSynth.start();
+    previewTimer = setTimeout(() => stopPreview(), 3000);
+  }
+
+  // ── Prehear: live preview all placed sources ──
+  let prehearWorld: SphereWorld | null = null;
+  let prehearActive = false;
+
+  function startPrehear(): void {
+    stopPrehear();
+    const builder = worldCreator.getBuilder();
+    if (builder.isEmpty()) return;
+    prehearActive = true;
+    prehearWorld = SphereWorld.fromUserSources(builder.getSources().map(s => ({ ...s })));
+    if (!audio.isStarted()) void audio.start();
+  }
+
+  function stopPrehear(): void {
+    prehearActive = false;
+    if (prehearWorld) { prehearWorld.dispose(); prehearWorld = null; }
+  }
+
   const worldCreator = new WorldCreator(
     worldCreatorContainer,
     {
       onPlacementModeChange: () => { /* cursor hint could go here */ },
-      onWorldChanged: () => { /* preview updates happen via builder in render loop */ },
-      onPlay: () => { exitCreateMode(true); },
+      onWorldChanged: () => {
+        // If prehearing, rebuild the preview world with updated sources
+        if (prehearActive) startPrehear();
+      },
+      onPlay: () => { stopPreview(); stopPrehear(); exitCreateMode(true); },
+      onPreviewArchetype: (name) => { void playArchetypePreview(name); },
+      onPrehearToggle: (active) => { if (active) startPrehear(); else stopPrehear(); },
     },
   );
 
@@ -240,6 +287,8 @@ async function bootstrap(): Promise<void> {
     createMode = true;
     paused = false;
     createNavTarget = null;
+    stopPreview();
+    stopPrehear();
     // Close other editors
     if (archetypeEditor.isOpen()) toggleArchetypeEditor();
     if (weatherEditor.isOpen()) toggleWeatherEditor();
@@ -253,6 +302,7 @@ async function bootstrap(): Promise<void> {
   function exitCreateMode(play: boolean): void {
     if (!createMode) return;
     createMode = false;
+    createNavTarget = null;
     worldCreator.close();
     if (play) {
       const builder = worldCreator.getBuilder();
@@ -263,9 +313,11 @@ async function bootstrap(): Promise<void> {
         weather = WeatherZoneEngine.fromUserZones(builder.getZones().map(z => ({ ...z })));
         latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
       }
+      // paused was set to false in enterCreateMode; reset it so resumeExperience works
+      paused = true;
       void resumeExperience();
     } else {
-      // ESC from create mode → show paused overlay
+      paused = true;
       setOverlay('paused');
     }
   }
@@ -526,6 +578,16 @@ async function bootstrap(): Promise<void> {
         weatherAccumulator %= weatherStepSec;
       }
     } else {
+      // In create mode, tick prehear world if active
+      if (prehearActive && prehearWorld && worldAccumulator >= worldStepSec) {
+        prehearWorld.update(
+          elapsedSecs,
+          playerState.position,
+          playerState.heading,
+          audio.masterGain,
+          audio.isStarted(),
+        );
+      }
       worldAccumulator %= worldStepSec;
       weatherAccumulator %= weatherStepSec;
     }

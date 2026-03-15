@@ -9,6 +9,8 @@ export interface WorldCreatorCallbacks {
   onPlacementModeChange: (active: boolean) => void;
   onWorldChanged: () => void;
   onPlay: () => void;
+  onPreviewArchetype: (archetypeName: string) => void;
+  onPrehearToggle: (active: boolean) => void;
 }
 
 type PlacementMode =
@@ -134,6 +136,11 @@ const CSS = `
   padding: 11px 0;
 }
 .wc-btn-play:hover { background: rgba(30, 80, 65, 0.7); }
+.wc-btn-prehear-active {
+  border-color: #ee8833 !important;
+  color: #ee8833 !important;
+  box-shadow: 0 0 8px rgba(238,136,51,0.25);
+}
 
 /* Engine tab bar */
 .wc-engine-tabs {
@@ -352,6 +359,7 @@ export class WorldCreator {
   private existsOnServer = false;
   private activeEngine: SoundEngineType = 'subtractive';
   private lastExclusionWarn = '';
+  private prehearing = false;
 
   constructor(container: HTMLDivElement, callbacks: WorldCreatorCallbacks) {
     this.container = container;
@@ -384,6 +392,10 @@ export class WorldCreator {
     if (!this.open) return;
     this.open = false;
     this.cancelPlacement();
+    if (this.prehearing) {
+      this.prehearing = false;
+      this.callbacks.onPrehearToggle(false);
+    }
     this.container.classList.remove('wc-open');
   }
 
@@ -540,9 +552,12 @@ export class WorldCreator {
     }
     html += `</div>`;
 
-    // Play button
+    // Prehear + Play buttons
     html += `<div class="wc-section">
-      <button class="wc-btn wc-btn-play" data-action="play" style="width:100%;">\u25B6 Play This World</button>
+      <div class="wc-btn-row" style="margin-top:0;">
+        <button class="wc-btn${this.prehearing ? ' wc-btn-prehear-active' : ''}" data-action="prehear" style="flex:none;width:120px;">${this.prehearing ? '\u25A0 Stop' : '\u266B Prehear'}</button>
+        <button class="wc-btn wc-btn-play" data-action="play" style="flex:1;">\u25B6 Play This World</button>
+      </div>
     </div>`;
 
     // Status
@@ -646,6 +661,7 @@ export class WorldCreator {
           this.placement = { kind: 'source', archetypeName: name };
           this.lastExclusionWarn = '';
           this.callbacks.onPlacementModeChange(true);
+          this.callbacks.onPreviewArchetype(name);
         }
         this.render();
         break;
@@ -690,7 +706,16 @@ export class WorldCreator {
       case 'delete-world':
         void this.deleteWorld(el.dataset.id!);
         break;
+      case 'prehear':
+        this.prehearing = !this.prehearing;
+        this.callbacks.onPrehearToggle(this.prehearing);
+        this.render();
+        break;
       case 'play':
+        if (this.prehearing) {
+          this.prehearing = false;
+          this.callbacks.onPrehearToggle(false);
+        }
         this.callbacks.onPlay();
         break;
     }
