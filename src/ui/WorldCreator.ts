@@ -126,7 +126,7 @@ const CSS = `
   transition: border-color 0.15s, color 0.15s;
 }
 .wc-btn:hover { border-color: #33bbaa; color: #33bbaa; }
-.wc-btn-active { border-color: #33bbaa; color: #33bbaa; box-shadow: 0 0 6px rgba(51,187,170,0.25); }
+.wc-btn-active { border-color: #33bbaa; color: #33bbaa; background: rgba(51,187,170,0.12); box-shadow: 0 0 12px rgba(51,187,170,0.4), inset 0 0 6px rgba(51,187,170,0.12); }
 .wc-btn-danger:hover { border-color: #ee5533; color: #ee5533; }
 .wc-btn-play {
   background: rgba(20, 60, 50, 0.6);
@@ -163,7 +163,7 @@ const CSS = `
   text-align: center;
 }
 .wc-engine-tab:hover { opacity: 0.85; }
-.wc-engine-tab.wc-tab-active { opacity: 1; box-shadow: 0 0 10px rgba(255,255,255,0.1); }
+.wc-engine-tab.wc-tab-active { opacity: 1; box-shadow: 0 0 14px rgba(255,255,255,0.18), inset 0 0 6px rgba(255,255,255,0.06); }
 
 /* Archetype list within selected engine tab */
 .wc-arch-list {
@@ -185,7 +185,7 @@ const CSS = `
   transition: border-color 0.12s, color 0.12s;
 }
 .wc-arch-item:hover { border-color: #4488aa; color: #a0d0e8; }
-.wc-arch-item.wc-arch-selected { border-color: #33bbaa; color: #33bbaa; }
+.wc-arch-item.wc-arch-selected { border-color: #33bbaa; color: #33bbaa; background: rgba(51,187,170,0.15); box-shadow: 0 0 10px rgba(51,187,170,0.35), inset 0 0 6px rgba(51,187,170,0.15); }
 
 /* Placed item list */
 .wc-item-list {
@@ -439,8 +439,10 @@ export class WorldCreator {
   }
 
   private render(): void {
-    // Preserve scroll position across re-renders
+    // Preserve scroll positions across re-renders (outer container + inner sources section)
     const scrollTop = this.container.scrollTop;
+    const sourcesEl = this.container.querySelector('.wc-section-sources');
+    const sourcesScrollTop = sourcesEl ? sourcesEl.scrollTop : 0;
     let html = '';
 
     // Placement banner
@@ -564,8 +566,10 @@ export class WorldCreator {
     html += `<div class="wc-status">${sources.length} sources, ${zones.length} zones</div>`;
 
     this.container.innerHTML = html;
-    // Restore scroll position to prevent jump on re-render
+    // Restore scroll positions to prevent jump on re-render
     this.container.scrollTop = scrollTop;
+    const newSourcesEl = this.container.querySelector('.wc-section-sources');
+    if (newSourcesEl) newSourcesEl.scrollTop = sourcesScrollTop;
   }
 
   private renderBrowsePanel(): string {
