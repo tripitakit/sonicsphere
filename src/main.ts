@@ -237,6 +237,7 @@ async function bootstrap(): Promise<void> {
   function enterCreateMode(): void {
     if (createMode) return;
     createMode = true;
+    paused = false;
     createNavTarget = null;
     // Close other editors
     if (archetypeEditor.isOpen()) toggleArchetypeEditor();
@@ -417,12 +418,6 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
-    if (e.code === 'KeyC' && !createMode && !paused) {
-      e.preventDefault();
-      enterCreateMode();
-      return;
-    }
-
     if (e.code === 'KeyE' && !createMode) {
       e.preventDefault();
       toggleArchetypeEditor();
@@ -436,6 +431,13 @@ async function bootstrap(): Promise<void> {
 
   editorTrigger?.addEventListener('click', () => {
     toggleArchetypeEditor();
+  });
+
+  // Create World button on overlay
+  const overlayCreateBtn = document.getElementById('overlay-create-btn') as HTMLButtonElement | null;
+  overlayCreateBtn?.addEventListener('click', (e) => {
+    e.stopPropagation(); // don't trigger overlay resume
+    enterCreateMode();
   });
 
   // User gesture gate: click to start/resume audio.

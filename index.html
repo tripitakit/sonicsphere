@@ -145,6 +145,26 @@
       color: rgba(177, 219, 245, 0.65);
     }
 
+    .overlay-create-btn {
+      margin-top: 0.4rem;
+      padding: 0.52rem 1.2rem;
+      border-radius: 999px;
+      border: 1px solid rgba(51, 187, 170, 0.5);
+      background: rgba(20, 60, 50, 0.25);
+      font-size: clamp(0.58rem, 1.4vw, 0.72rem);
+      color: rgba(51, 187, 170, 0.8);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, background 0.2s, box-shadow 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+    }
+    .overlay-create-btn:hover {
+      border-color: #33bbaa;
+      color: #33bbaa;
+      background: rgba(20, 60, 50, 0.45);
+      box-shadow: 0 0 16px rgba(51, 187, 170, 0.2);
+    }
+
     .overlay-footnote {
       margin-top: 0.26rem;
       font-family: 'Space Mono', 'IBM Plex Mono', 'Menlo', monospace;
@@ -197,6 +217,7 @@
       <span class="hint" id="overlay-hint-primary">click to enter</span>
       <span class="hint" id="overlay-hint-controls">click/tap set direction | A/D rotate gizmo | ESC pause</span>
       <span class="hint overlay-headphones">headphones recommended</span>
+      <button id="overlay-create-btn" class="hint overlay-create-btn">create world</button>
       <span class="overlay-footnote">explore by listening</span>
     </div>
   </div>

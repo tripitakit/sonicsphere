@@ -1,4 +1,4 @@
-import type { SphericalCoord, WeatherZoneType, WorldSummary } from '../types.ts';
+import type { SoundEngineType, SphericalCoord, WeatherZoneType, WorldSummary } from '../types.ts';
 import { ARCHETYPES } from '../audio/archetypes.ts';
 import { WorldBuilder } from '../engine/WorldBuilder.ts';
 import { chordDistance } from '../engine/sphereMath.ts';
@@ -16,24 +16,19 @@ type PlacementMode =
   | { kind: 'source'; archetypeName: string }
   | { kind: 'zone'; zoneType: WeatherZoneType };
 
-// ── Archetype families ───────────────────────────────────────────────────────
+// ── Engine tabs ──────────────────────────────────────────────────────────────
 
-/** Derive family name from archetype name: strip trailing -a..-f and -rhythm suffix. */
-function familyOf(name: string): string {
-  // E.g. "bamboo-rhythm-a" → "bamboo", "wind-gust" → "wind", "glass-fm-chime" → "glass-fm"
-  // "drop-rhythm-f" → "drop", "dust-noise-bed" → "dust-noise"
-  const stripped = name.replace(/-rhythm-[a-f]$/, '').replace(/-[a-f]$/, '');
-  // For drone/non-rhythmic, use the first word as family
-  const parts = stripped.split('-');
-  // Heuristic: if archetype has a clear category prefix, use it
-  // Most families are 1-word prefix: wind, stream, rain, cricket, etc.
-  return parts[0]!;
-}
+const ENGINE_TABS: { engine: SoundEngineType; label: string; color: string; border: string; bg: string }[] = [
+  { engine: 'subtractive', label: 'Synth',     color: '#7fb8d4', border: '#3388aa', bg: 'rgba(20,55,80,0.5)' },
+  { engine: 'noise',       label: 'Noise',     color: '#b8a47f', border: '#aa8833', bg: 'rgba(60,45,20,0.5)' },
+  { engine: 'fm',          label: 'FM',        color: '#a47fb8', border: '#8833aa', bg: 'rgba(50,20,60,0.5)' },
+  { engine: 'resonator',   label: 'Resonator', color: '#7fb8a4', border: '#33aa88', bg: 'rgba(20,60,45,0.5)' },
+];
 
-interface ArchetypeFamily {
-  name: string;
-  hue: number; // HSL hue derived from name hash (matches WorldView palette)
-  archetypes: string[];
+function archetypesByEngine(engine: SoundEngineType): string[] {
+  return ARCHETYPES
+    .filter(a => (a.engine ?? 'subtractive') === engine)
+    .map(a => a.name);
 }
 
 function hashString(value: string): number {
@@ -45,23 +40,6 @@ function hashString(value: string): number {
   return hash >>> 0;
 }
 
-function buildFamilies(): ArchetypeFamily[] {
-  const map = new Map<string, string[]>();
-  for (const a of ARCHETYPES) {
-    const fam = familyOf(a.name);
-    const list = map.get(fam);
-    if (list) list.push(a.name);
-    else map.set(fam, [a.name]);
-  }
-  return Array.from(map.entries()).map(([name, archetypes]) => ({
-    name,
-    hue: hashString(archetypes[0]!) % 360,
-    archetypes,
-  }));
-}
-
-const FAMILIES = buildFamilies();
-
 /** Minimum chord distance between two placed sources (maps to ~10px at default zoom). */
 const SOURCE_EXCLUSION_RADIUS = 2.5;
 
@@ -70,16 +48,16 @@ const SOURCE_EXCLUSION_RADIUS = 2.5;
 const CSS = `
 #world-creator {
   position: fixed;
-  top: 12px;
-  left: 12px;
-  width: 340px;
-  max-height: 92vh;
+  top: 10px;
+  left: 10px;
+  width: 510px;
+  max-height: 94vh;
   overflow-y: auto;
-  background: rgba(8, 22, 38, 0.93);
+  background: rgba(8, 22, 38, 0.94);
   border: 1px solid #1a3a55;
-  border-radius: 13px;
+  border-radius: 14px;
   font-family: 'Courier New', monospace;
-  font-size: 13px;
+  font-size: 15px;
   color: #a0c8e0;
   z-index: 1000;
   display: none;
@@ -88,49 +66,49 @@ const CSS = `
 #world-creator.wc-open { display: block; }
 
 .wc-section {
-  padding: 10px 13px;
+  padding: 14px 18px;
   border-bottom: 1px solid #1a3a55;
 }
 .wc-section:last-child { border-bottom: none; }
 
 .wc-section-title {
-  font-size: 10px;
-  letter-spacing: 1.2px;
+  font-size: 12px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
   color: #5a8aa5;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .wc-name-input {
   width: 100%;
   background: rgba(5, 16, 28, 0.8);
   border: 1px solid #1a3a55;
-  border-radius: 6px;
+  border-radius: 7px;
   color: #d7f1ff;
   font-family: inherit;
-  font-size: 14px;
-  padding: 6px 9px;
+  font-size: 16px;
+  padding: 8px 12px;
   outline: none;
 }
 .wc-name-input:focus { border-color: #33bbaa; }
 
 .wc-btn-row {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 10px;
   flex-wrap: wrap;
 }
 
 .wc-btn {
   flex: 1;
-  min-width: 60px;
-  padding: 6px 0;
+  min-width: 70px;
+  padding: 8px 0;
   background: rgba(16, 42, 62, 0.7);
   border: 1px solid #1a3a55;
-  border-radius: 6px;
+  border-radius: 7px;
   color: #7fb8d4;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   cursor: pointer;
@@ -143,47 +121,49 @@ const CSS = `
   background: rgba(20, 60, 50, 0.6);
   border-color: #33bbaa;
   color: #33bbaa;
-  font-size: 13px;
-  padding: 9px 0;
+  font-size: 15px;
+  padding: 11px 0;
 }
 .wc-btn-play:hover { background: rgba(30, 80, 65, 0.7); }
 
-/* Family selector buttons */
-.wc-family-grid {
+/* Engine tab bar */
+.wc-engine-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-bottom: 10px;
 }
-.wc-family-btn {
-  padding: 4px 8px;
-  border-radius: 10px;
+.wc-engine-tab {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 8px;
   font-family: inherit;
-  font-size: 10px;
-  letter-spacing: 0.3px;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
   cursor: pointer;
   border: 1px solid;
-  transition: opacity 0.12s;
-  opacity: 0.65;
+  transition: opacity 0.15s;
+  opacity: 0.55;
+  text-align: center;
 }
-.wc-family-btn:hover { opacity: 0.9; }
-.wc-family-btn.wc-family-active { opacity: 1; box-shadow: 0 0 8px rgba(255,255,255,0.15); }
+.wc-engine-tab:hover { opacity: 0.85; }
+.wc-engine-tab.wc-tab-active { opacity: 1; box-shadow: 0 0 10px rgba(255,255,255,0.1); }
 
-/* Archetype list within selected family */
+/* Archetype list within selected engine tab */
 .wc-arch-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-  max-height: 120px;
+  gap: 6px;
+  margin-top: 8px;
+  max-height: 180px;
   overflow-y: auto;
 }
 .wc-arch-item {
-  padding: 4px 8px;
+  padding: 6px 12px;
   background: rgba(12, 30, 48, 0.7);
-  border: 1px solid #142a3c;
-  border-radius: 4px;
-  font-size: 10px;
+  border: 1px solid #1a3550;
+  border-radius: 5px;
+  font-size: 12px;
   color: #6b94ad;
   cursor: pointer;
   white-space: nowrap;
@@ -194,41 +174,41 @@ const CSS = `
 
 /* Placed item list */
 .wc-item-list {
-  max-height: 160px;
+  max-height: 200px;
   overflow-y: auto;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .wc-item-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 4px;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
   cursor: pointer;
 }
 .wc-item-row:hover { background: rgba(20, 50, 70, 0.4); }
 .wc-item-row.wc-item-selected { background: rgba(30, 70, 90, 0.5); border: 1px solid #2a6080; }
 .wc-item-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 .wc-item-name {
   flex: 1;
-  font-size: 11px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .wc-item-del {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   background: none;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 4px;
   color: #5a6a78;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -239,14 +219,14 @@ const CSS = `
 /* Zone type buttons */
 .wc-zone-btns {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 .wc-zone-btn {
   flex: 1;
-  padding: 6px 0;
-  border-radius: 6px;
+  padding: 8px 0;
+  border-radius: 7px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.5px;
   cursor: pointer;
   border: 1px solid;
@@ -258,12 +238,12 @@ const CSS = `
 .wc-slider-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 4px;
+  gap: 8px;
+  margin-top: 5px;
 }
 .wc-slider-label {
-  width: 60px;
-  font-size: 10px;
+  width: 72px;
+  font-size: 12px;
   color: #5a8aa5;
   text-align: right;
 }
@@ -272,69 +252,69 @@ const CSS = `
   accent-color: #33bbaa;
 }
 .wc-slider-val {
-  width: 36px;
-  font-size: 10px;
+  width: 42px;
+  font-size: 12px;
   color: #7fb8d4;
   text-align: left;
 }
 
 /* Browse panel */
 .wc-browse-list {
-  max-height: 240px;
+  max-height: 280px;
   overflow-y: auto;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .wc-browse-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px;
+  gap: 8px;
+  padding: 8px;
   border-bottom: 1px solid #0f2030;
 }
 .wc-browse-row:last-child { border-bottom: none; }
 .wc-browse-info {
   flex: 1;
-  font-size: 11px;
+  font-size: 13px;
 }
 .wc-browse-name { color: #a0d0e8; }
-.wc-browse-meta { color: #4a7a96; font-size: 9px; margin-top: 2px; }
-.wc-browse-actions { display: flex; gap: 4px; }
+.wc-browse-meta { color: #4a7a96; font-size: 11px; margin-top: 3px; }
+.wc-browse-actions { display: flex; gap: 6px; }
 
 /* Placement banner */
 .wc-placement-banner {
-  padding: 8px 13px;
+  padding: 10px 18px;
   background: rgba(20, 60, 50, 0.5);
   border-bottom: 1px solid #1a5a4a;
   color: #33bbaa;
-  font-size: 11px;
+  font-size: 13px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .wc-placement-cancel {
   margin-left: auto;
-  padding: 3px 10px;
+  padding: 4px 14px;
   background: none;
   border: 1px solid #33bbaa;
-  border-radius: 4px;
+  border-radius: 5px;
   color: #33bbaa;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 
 /* Status line */
 .wc-status {
-  padding: 6px 13px;
-  font-size: 10px;
+  padding: 8px 18px;
+  font-size: 12px;
   color: #3a6a8a;
   text-align: center;
 }
 
 /* Exclusion warning */
 .wc-warn {
-  padding: 6px 13px;
-  font-size: 10px;
+  padding: 8px 18px;
+  font-size: 12px;
   color: #ee8833;
   text-align: center;
   background: rgba(100,60,20,0.2);
@@ -362,7 +342,7 @@ export class WorldCreator {
   private selectedSourceId: string | null = null;
   private selectedZoneId: string | null = null;
   private existsOnServer = false;
-  private activeFamily: string | null = null;
+  private activeEngine: SoundEngineType = 'subtractive';
   private lastExclusionWarn = '';
 
   constructor(container: HTMLDivElement, callbacks: WorldCreatorCallbacks) {
@@ -469,32 +449,28 @@ export class WorldCreator {
       html += this.renderBrowsePanel();
     }
 
-    // Sources section with family selector
+    // Sources section with engine tabs
     html += `<div class="wc-section">
       <div class="wc-section-title">Sources (${this.builder.getSources().length})</div>
-      <div class="wc-family-grid">`;
-    for (const fam of FAMILIES) {
-      const isActive = this.activeFamily === fam.name;
-      const bg = hslStr(fam.hue, 40, 18);
-      const border = hslStr(fam.hue, 60, 45);
-      const color = hslStr(fam.hue, 75, 70);
-      html += `<button class="wc-family-btn${isActive ? ' wc-family-active' : ''}" data-action="pick-family" data-family="${fam.name}" style="background:${bg};border-color:${border};color:${color};">${fam.name}</button>`;
+      <div class="wc-engine-tabs">`;
+    for (const tab of ENGINE_TABS) {
+      const isActive = this.activeEngine === tab.engine;
+      html += `<button class="wc-engine-tab${isActive ? ' wc-tab-active' : ''}" data-action="pick-engine" data-engine="${tab.engine}" style="background:${tab.bg};border-color:${tab.border};color:${tab.color};">${tab.label}</button>`;
     }
     html += `</div>`;
 
-    // Show archetypes for selected family
-    if (this.activeFamily) {
-      const fam = FAMILIES.find(f => f.name === this.activeFamily);
-      if (fam) {
-        html += `<div class="wc-arch-list">`;
-        for (const archName of fam.archetypes) {
-          const isSelected = this.placement.kind === 'source' && this.placement.archetypeName === archName;
-          const color = hslStr(fam.hue, 75, isSelected ? 75 : 60);
-          const borderColor = isSelected ? hslStr(fam.hue, 80, 65) : '#142a3c';
-          html += `<div class="wc-arch-item${isSelected ? ' wc-arch-selected' : ''}" data-action="pick-archetype" data-name="${archName}" style="color:${color};border-color:${borderColor};">${archName}</div>`;
-        }
-        html += `</div>`;
+    // Show archetypes for selected engine tab
+    const archNames = archetypesByEngine(this.activeEngine);
+    if (archNames.length > 0) {
+      html += `<div class="wc-arch-list">`;
+      for (const archName of archNames) {
+        const isSelected = this.placement.kind === 'source' && this.placement.archetypeName === archName;
+        const hue = hashString(archName) % 360;
+        const color = hslStr(hue, 75, isSelected ? 75 : 60);
+        const borderColor = isSelected ? hslStr(hue, 80, 65) : '#1a3550';
+        html += `<div class="wc-arch-item${isSelected ? ' wc-arch-selected' : ''}" data-action="pick-archetype" data-name="${archName}" style="color:${color};border-color:${borderColor};">${archName}</div>`;
       }
+      html += `</div>`;
     }
 
     // Placed sources list
@@ -508,7 +484,7 @@ export class WorldCreator {
         html += `<div class="wc-item-row${isSelected ? ' wc-item-selected' : ''}" data-action="select-source" data-id="${src.id}">
           <div class="wc-item-dot" style="background:${dotColor};"></div>
           <span class="wc-item-name">${this.escapeHtml(src.archetypeName)}</span>
-          <span style="font-size:9px;color:#4a7a96;">${src.position.lat.toFixed(0)},${src.position.lon.toFixed(0)}</span>
+          <span style="font-size:11px;color:#4a7a96;">${src.position.lat.toFixed(0)},${src.position.lon.toFixed(0)}</span>
           <button class="wc-item-del" data-action="del-source" data-id="${src.id}">&times;</button>
         </div>`;
       }
@@ -538,7 +514,7 @@ export class WorldCreator {
           <div class="wc-item-row${isSelected ? ' wc-item-selected' : ''}" data-action="select-zone" data-id="${zone.id}">
             <div class="wc-item-dot" style="background:${c.color};"></div>
             <span class="wc-item-name">${zone.type} zone</span>
-            <span style="font-size:9px;color:#4a7a96;">${zone.center.lat.toFixed(0)},${zone.center.lon.toFixed(0)}</span>
+            <span style="font-size:11px;color:#4a7a96;">${zone.center.lat.toFixed(0)},${zone.center.lon.toFixed(0)}</span>
             <button class="wc-item-del" data-action="del-zone" data-id="${zone.id}">&times;</button>
           </div>`;
         if (isSelected) {
@@ -567,7 +543,7 @@ export class WorldCreator {
       <div class="wc-section-title">Public Worlds</div>
       <div class="wc-browse-list">`;
     if (this.browseWorlds.length === 0) {
-      html += `<div style="color:#3a6a8a;font-size:11px;padding:8px;">No worlds saved yet</div>`;
+      html += `<div style="color:#3a6a8a;font-size:13px;padding:10px;">No worlds saved yet</div>`;
     }
     const myId = getAuthorId();
     for (const w of this.browseWorlds) {
@@ -578,8 +554,8 @@ export class WorldCreator {
           <div class="wc-browse-meta">${w.sourceCount} sources, ${w.zoneCount} zones${isMine ? ' (yours)' : ''}</div>
         </div>
         <div class="wc-browse-actions">
-          <button class="wc-btn" data-action="load-world" data-id="${w.id}" style="min-width:40px;flex:none;padding:4px 8px;">Load</button>
-          ${isMine ? `<button class="wc-btn wc-btn-danger" data-action="delete-world" data-id="${w.id}" style="min-width:32px;flex:none;padding:4px 8px;">Del</button>` : ''}
+          <button class="wc-btn" data-action="load-world" data-id="${w.id}" style="min-width:48px;flex:none;padding:5px 10px;">Load</button>
+          ${isMine ? `<button class="wc-btn wc-btn-danger" data-action="delete-world" data-id="${w.id}" style="min-width:38px;flex:none;padding:5px 10px;">Del</button>` : ''}
         </div>
       </div>`;
     }
@@ -588,7 +564,7 @@ export class WorldCreator {
   }
 
   private renderZoneSliders(id: string, radius: number, feather: number, intensity: number): string {
-    return `<div style="padding:4px 6px 8px 20px;">
+    return `<div style="padding:6px 8px 10px 24px;">
       <div class="wc-slider-row">
         <span class="wc-slider-label">Radius</span>
         <input class="wc-slider" type="range" min="5" max="40" step="1" value="${radius}" data-action="zone-param" data-id="${id}" data-param="radiusDeg" />
@@ -631,17 +607,20 @@ export class WorldCreator {
           this.existsOnServer = false;
           this.selectedSourceId = null;
           this.selectedZoneId = null;
-          this.activeFamily = null;
           this.cancelPlacement();
           this.callbacks.onWorldChanged();
           this.render();
           break;
-        case 'pick-family': {
-          const fam = target.dataset.family!;
-          this.activeFamily = this.activeFamily === fam ? null : fam;
-          // If deselecting family, also cancel any source placement from that family
-          if (!this.activeFamily && this.placement.kind === 'source') {
-            this.cancelPlacement();
+        case 'pick-engine': {
+          const engine = target.dataset.engine as SoundEngineType;
+          this.activeEngine = engine;
+          // Cancel source placement if it was from a different engine
+          const pl = this.placement;
+          if (pl.kind === 'source') {
+            const arch = ARCHETYPES.find(a => a.name === pl.archetypeName);
+            if (arch && (arch.engine ?? 'subtractive') !== engine) {
+              this.cancelPlacement();
+            }
           }
           this.render();
           break;
@@ -762,7 +741,6 @@ export class WorldCreator {
       this.existsOnServer = true;
       this.selectedSourceId = null;
       this.selectedZoneId = null;
-      this.activeFamily = null;
       this.cancelPlacement();
       this.browseOpen = false;
       this.callbacks.onWorldChanged();
