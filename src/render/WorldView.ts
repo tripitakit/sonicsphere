@@ -369,7 +369,7 @@ export class WorldView {
     screenH: number,
     elapsed: number,
     directionAngleDeg: number,
-    showManualOverride: boolean,
+    manualOverrideProgress: number,
     weatherProfileIdx = 1,
     fxOverlayOpen = false,
     selectedSourceId: string | null = null,
@@ -400,7 +400,7 @@ export class WorldView {
     // Anchor FX button to bottom-left: centre 44px above bottom edge
     this.fxBtn.y = screenH - 44;
     this.drawFxButton(weatherProfileIdx, fxOverlayOpen, elapsed);
-    this.drawPlayerDot(cx, cy, directionAngleDeg, showManualOverride);
+    this.drawPlayerDot(cx, cy, directionAngleDeg, manualOverrideProgress);
 
     // Draw each source
     const visible = this.visibleSourceIds;
@@ -975,7 +975,8 @@ export class WorldView {
     }
   }
 
-  private drawPlayerDot(cx: number, cy: number, directionAngleDeg: number, showManualOverride: boolean): void {
+  /** @param manualOverrideProgress 0 = no override, 1 = just activated, decreases to 0 */
+  private drawPlayerDot(cx: number, cy: number, directionAngleDeg: number, manualOverrideProgress: number): void {
     this.playerDot.clear();
 
     const ringR = 9;
@@ -998,10 +999,26 @@ export class WorldView {
       .stroke({ color: 0xffe8cb, alpha: 0.88, width: 1.3 });
     this.playerDot.circle(hx, hy, 2.1).fill({ color: 0xfff2e3, alpha: 0.92 });
 
-    if (!showManualOverride) return;
+    if (manualOverrideProgress <= 0) return;
 
-    this.playerDot.circle(cx, cy, guideR + 4).stroke({ color: 0x1e4150, alpha: 0.28, width: 1 });
-    this.playerDot.circle(cx, cy, guideR).stroke({ color: 0x6cd8f7, alpha: 0.12, width: 1 });
+    // Countdown arc: sweeps from full circle down to nothing as override expires.
+    // Thickness interpolates from 3px (full) to 1px (expiring).
+    const countdownR = guideR + 4;
+    const arcSweep = manualOverrideProgress * Math.PI * 2;  // radians of arc remaining
+    const arcWidth = 1 + manualOverrideProgress * 2;        // 3px → 1px
+    const arcAlpha = 0.2 + manualOverrideProgress * 0.25;   // fade out gently
+    const arcStart = -Math.PI / 2 - arcSweep / 2;           // centered on top (12-o'clock)
+    const arcSteps = Math.max(8, Math.ceil(arcSweep / 0.12));
+    for (let i = 0; i <= arcSteps; i++) {
+      const a = arcStart + (arcSweep * i) / arcSteps;
+      const x = cx + Math.cos(a) * countdownR;
+      const y = cy + Math.sin(a) * countdownR;
+      if (i === 0) this.playerDot.moveTo(x, y);
+      else this.playerDot.lineTo(x, y);
+    }
+    this.playerDot.stroke({ color: 0x6cd8f7, alpha: arcAlpha, width: arcWidth });
+
+    this.playerDot.circle(cx, cy, guideR).stroke({ color: 0x6cd8f7, alpha: 0.08, width: 1 });
 
     if (Math.abs(directionAngleDeg) > 1) {
       const steps = Math.max(3, Math.ceil(Math.abs(directionAngleDeg) / 12));

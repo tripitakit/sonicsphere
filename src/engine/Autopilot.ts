@@ -12,7 +12,7 @@ const AUTOPILOT_SPEED = 3 / 8; // fraction of PLAYER_SPEED (8 u/s)
 const GIZMO_ROTATION_SPEED_DEG = 120;
 const TURN_FULL_LOCK_ANGLE_DEG = 72;
 const STRAIGHT_DEADZONE_DEG = 0.75;
-const MANUAL_OVERRIDE_DURATION_SEC = 30;
+export const MANUAL_OVERRIDE_DURATION_SEC = 30;
 
 // Incommensurable periods keep the autopilot path organic and non-repeating.
 const PERIOD_1 = 44.7;

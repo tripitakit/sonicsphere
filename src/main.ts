@@ -1,7 +1,7 @@
 import { AudioEngine }    from './engine/AudioEngine.ts';
 import { SphereWorld }    from './engine/SphereWorld.ts';
 import { Player }         from './engine/Player.ts';
-import { Autopilot }      from './engine/Autopilot.ts';
+import { Autopilot, MANUAL_OVERRIDE_DURATION_SEC } from './engine/Autopilot.ts';
 import { PERFORMANCE_BUDGET, PERFORMANCE_TIER } from './engine/PerformanceBudget.ts';
 import { chordDistance } from './engine/sphereMath.ts';
 import {
@@ -427,7 +427,7 @@ async function bootstrap(): Promise<void> {
         renderer.height,
         elapsedSecs,
         autopilot.getDirectionAngle(playerState.heading),
-        autopilot.isManualOverrideActive(),
+        autopilot.getManualOverrideRemainingSec() / MANUAL_OVERRIDE_DURATION_SEC,
         weatherProfileIdx,
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
