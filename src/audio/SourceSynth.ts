@@ -65,6 +65,7 @@ export class SourceSynth {
     const tunedLfoRate = archetype.lfoRate * variation.lfoRateMult;
 
     this.baseMainGain = engine === 'noise' ? 0.72 : engine === 'resonator' ? 0.64 : 0.58;
+    if (isRhythmic) this.baseMainGain *= 2;
     this.mainMix = new Tone.Gain(this.baseMainGain);
     this.preFilterBus = new Tone.Gain(1);
 
@@ -125,7 +126,7 @@ export class SourceSynth {
         ? Math.max(0.03, archetype.decay)
         : Math.max(0.8, archetype.decay),
       sustain: isRhythmic
-        ? Math.min(0.45, Math.max(0, archetype.sustain))
+        ? Math.min(0.45, Math.max(0.15, archetype.sustain))
         : Math.max(0.72, archetype.sustain),
       release: this.releaseSeconds,
     });
@@ -297,9 +298,10 @@ export class SourceSynth {
         break;
       case 'sustain': {
         const v = Number(value);
-        this.envelope.sustain = v;
+        const clampedV = this.archetype.mode === 'rhythmic' ? Math.max(0.15, v) : v;
+        this.envelope.sustain = clampedV;
         // Ramp mainMix gain for immediate audible effect on the held note.
-        this.mainMix.gain.rampTo(this.baseMainGain * Math.max(0, v), 0.05);
+        this.mainMix.gain.rampTo(this.baseMainGain * Math.max(0, clampedV), 0.05);
         break;
       }
       case 'release': {
