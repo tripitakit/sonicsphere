@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
-import type { ActiveWeatherZone, SoundEngineType, SphericalCoord, WeatherZoneType } from '../types.ts';
+import type { ActiveWeatherZone, SoundEngineType, SphericalCoord, UserSourceDef, WeatherZoneType } from '../types.ts';
 import type { SoundSource } from '../engine/SoundSource.ts';
+import { ARCHETYPES } from '../audio/archetypes.ts';
 import {
   chordDistance,
   directionInPlayerFrame,
@@ -464,6 +465,52 @@ export class WorldView {
         this.drawSourceGlyph(g, glyphShape, 10.5, 0x33bbaa, 0.55 * selPulse, 1.8);
         this.drawSourceGlyph(g, glyphShape, 7.8, 0xaafff0, 0.30 * selPulse, 1.2);
       }
+    }
+
+    for (const [id, g] of this.sourceGraphics) {
+      if (!visible.has(id)) g.visible = false;
+    }
+  }
+
+  /**
+   * Draw lightweight preview glyphs for builder-placed sources.
+   * Used in create mode instead of the full SoundSource rendering.
+   */
+  drawPreviewSources(
+    playerPos: SphericalCoord,
+    playerHeading: number,
+    previewSources: readonly UserSourceDef[],
+    elapsed: number,
+  ): void {
+    const visible = this.visibleSourceIds;
+    visible.clear();
+
+    for (const src of previewSources) {
+      const dist = chordDistance(playerPos, src.position);
+      if (dist > SPHERE_RADIUS * 1.5) continue;
+
+      visible.add(src.id);
+      const screen = this.project(playerPos, playerHeading, src.position);
+      const g = this.getOrCreate(src.id);
+      g.visible = true;
+      g.x = screen.x;
+      g.y = screen.y;
+
+      const archetype = ARCHETYPES.find(a => a.name === src.archetypeName);
+      const engine: SoundEngineType = archetype?.engine ?? 'subtractive';
+      const glyphShape = glyphShapeForEngine(engine);
+      const palette = this.getArchetypePalette(src.archetypeName);
+
+      const idHash = src.id.charCodeAt(9) ?? 0;
+      const phaseA = idHash * 0.13;
+      const pulse = 1 + 0.06 * Math.sin(elapsed * 1.4 + phaseA);
+      const radius = 5 * pulse;
+
+      g.clear();
+      this.drawSourceGlyph(g, glyphShape, radius * 2.0, palette.glowOuter, 0.06);
+      this.drawSourceGlyph(g, glyphShape, radius * 1.4, palette.glowInner, 0.15);
+      this.drawSourceGlyph(g, glyphShape, radius, palette.body, 0.7);
+      this.drawSourceGlyph(g, glyphShape, radius * 0.35, palette.core, 0.85);
     }
 
     for (const [id, g] of this.sourceGraphics) {

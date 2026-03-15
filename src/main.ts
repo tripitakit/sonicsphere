@@ -3,7 +3,7 @@ import { SphereWorld }    from './engine/SphereWorld.ts';
 import { Player }         from './engine/Player.ts';
 import { Autopilot, MANUAL_OVERRIDE_DURATION_SEC } from './engine/Autopilot.ts';
 import { PERFORMANCE_BUDGET, PERFORMANCE_TIER } from './engine/PerformanceBudget.ts';
-import { chordDistance } from './engine/sphereMath.ts';
+import { chordDistance, bearingDeg } from './engine/sphereMath.ts';
 import {
   WeatherZoneEngine,
   setWeatherFxProfile,
@@ -221,6 +221,9 @@ async function bootstrap(): Promise<void> {
 
   // ── Create World mode ─────────────────────────────────────────────────────
   let createMode = false;
+  let createNavTarget: { lat: number; lon: number } | null = null;
+  const CREATE_NAV_SPEED = 6.0;        // forward multiplier (× PLAYER_SPEED)
+  const CREATE_NAV_ARRIVAL = 5;        // chord distance arrival threshold
 
   const worldCreator = new WorldCreator(
     worldCreatorContainer,
@@ -234,6 +237,7 @@ async function bootstrap(): Promise<void> {
   function enterCreateMode(): void {
     if (createMode) return;
     createMode = true;
+    createNavTarget = null;
     // Close other editors
     if (archetypeEditor.isOpen()) toggleArchetypeEditor();
     if (weatherEditor.isOpen()) toggleWeatherEditor();
@@ -349,9 +353,8 @@ async function bootstrap(): Promise<void> {
     // Any PixiJS canvas button sets this flag synchronously before this handler fires
     if (pixiBtnConsumed) { pixiBtnConsumed = false; return; }
 
-    // Create mode: place sources/zones on sphere
+    // Create mode: place sources/zones on sphere, or click-to-navigate
     if (createMode) {
-      if (!worldCreator.isPlacementActive()) return;
       e.preventDefault();
       const rect   = renderer.app.canvas.getBoundingClientRect();
       const scaleX = renderer.width  / rect.width;
@@ -362,7 +365,13 @@ async function bootstrap(): Promise<void> {
         px, py, renderer.width, renderer.height,
         player.getPosition(), player.getHeading(),
       );
-      if (pos) worldCreator.handleSphereClick(pos);
+      if (!pos) return;
+      if (worldCreator.isPlacementActive()) {
+        worldCreator.handleSphereClick(pos);
+      } else {
+        // Click-to-navigate at speed 6
+        createNavTarget = pos;
+      }
       return;
     }
 
@@ -464,14 +473,21 @@ async function bootstrap(): Promise<void> {
       const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
       player.update(dt, intent.forward, intent.turn);
     } else if (createMode) {
-      // In create mode: manual WASD/keyboard navigation only, no autopilot
-      const rotIntent = input.getRotationIntent();
-      if (rotIntent !== 0) {
-        autopilot.rotateTargetHeading(rotIntent, dt, player.getHeading());
+      // In create mode: click-to-navigate at speed 6 toward target
+      if (createNavTarget) {
+        const dist = chordDistance(player.getPosition(), createNavTarget);
+        if (dist < CREATE_NAV_ARRIVAL) {
+          createNavTarget = null;
+          player.update(dt, 0, 0);
+        } else {
+          const bearing = bearingDeg(player.getPosition(), createNavTarget);
+          const headingError = ((bearing - player.getHeading()) + 540) % 360 - 180;
+          const turn = Math.max(-1, Math.min(1, headingError / 30));
+          player.update(dt, CREATE_NAV_SPEED, turn);
+        }
+      } else {
+        player.update(dt, 0, 0);
       }
-      autopilot.tick(dt);
-      const intent = autopilot.getIntent(elapsedSecs, player.getPosition(), player.getHeading());
-      player.update(dt, intent.forward, intent.turn);
     }
 
     const playerState = player.getState();
@@ -506,11 +522,21 @@ async function bootstrap(): Promise<void> {
     if (renderAccumulator >= renderStepSec) {
       const weatherZonesToRender = weatherEditor.isOpen()
         ? latestWeatherFrame.activeZones.filter(z => z.id === weatherEditor.getSelectedZoneId())
-        : createMode ? [] : latestWeatherFrame.activeZones;
+        : createMode
+          ? worldCreator.getBuilder().getZones().map(z => ({
+              id: z.id,
+              type: z.type,
+              role: 'strong' as const,
+              center: z.center,
+              radiusDeg: z.radiusDeg,
+              featherDeg: z.featherDeg,
+              influence: z.intensity,
+            }))
+          : latestWeatherFrame.activeZones;
       worldView.update(
         playerState.position,
         playerState.heading,
-        world.getSources(),
+        createMode ? [] : world.getSources(),
         weatherZonesToRender,
         renderer.width,
         renderer.height,
@@ -521,6 +547,15 @@ async function bootstrap(): Promise<void> {
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
       );
+      // In create mode, draw preview glyphs for builder-placed sources
+      if (createMode) {
+        worldView.drawPreviewSources(
+          playerState.position,
+          playerState.heading,
+          worldCreator.getBuilder().getSources(),
+          elapsedSecs,
+        );
+      }
       renderAccumulator %= renderStepSec;
     }
 

@@ -1,6 +1,7 @@
 import type { SphericalCoord, WeatherZoneType, WorldSummary } from '../types.ts';
 import { ARCHETYPES } from '../audio/archetypes.ts';
 import { WorldBuilder } from '../engine/WorldBuilder.ts';
+import { chordDistance } from '../engine/sphereMath.ts';
 import * as api from '../api/WorldApi.ts';
 import { getAuthorId } from '../api/authorId.ts';
 
@@ -14,6 +15,55 @@ type PlacementMode =
   | { kind: 'none' }
   | { kind: 'source'; archetypeName: string }
   | { kind: 'zone'; zoneType: WeatherZoneType };
+
+// ── Archetype families ───────────────────────────────────────────────────────
+
+/** Derive family name from archetype name: strip trailing -a..-f and -rhythm suffix. */
+function familyOf(name: string): string {
+  // E.g. "bamboo-rhythm-a" → "bamboo", "wind-gust" → "wind", "glass-fm-chime" → "glass-fm"
+  // "drop-rhythm-f" → "drop", "dust-noise-bed" → "dust-noise"
+  const stripped = name.replace(/-rhythm-[a-f]$/, '').replace(/-[a-f]$/, '');
+  // For drone/non-rhythmic, use the first word as family
+  const parts = stripped.split('-');
+  // Heuristic: if archetype has a clear category prefix, use it
+  // Most families are 1-word prefix: wind, stream, rain, cricket, etc.
+  return parts[0]!;
+}
+
+interface ArchetypeFamily {
+  name: string;
+  hue: number; // HSL hue derived from name hash (matches WorldView palette)
+  archetypes: string[];
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function buildFamilies(): ArchetypeFamily[] {
+  const map = new Map<string, string[]>();
+  for (const a of ARCHETYPES) {
+    const fam = familyOf(a.name);
+    const list = map.get(fam);
+    if (list) list.push(a.name);
+    else map.set(fam, [a.name]);
+  }
+  return Array.from(map.entries()).map(([name, archetypes]) => ({
+    name,
+    hue: hashString(archetypes[0]!) % 360,
+    archetypes,
+  }));
+}
+
+const FAMILIES = buildFamilies();
+
+/** Minimum chord distance between two placed sources (maps to ~10px at default zoom). */
+const SOURCE_EXCLUSION_RADIUS = 2.5;
 
 // ── CSS ──────────────────────────────────────────────────────────────────────
 
@@ -98,27 +148,45 @@ const CSS = `
 }
 .wc-btn-play:hover { background: rgba(30, 80, 65, 0.7); }
 
-/* Archetype grid */
-.wc-arch-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+/* Family selector buttons */
+.wc-family-grid {
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  max-height: 200px;
-  overflow-y: auto;
   margin-top: 6px;
 }
+.wc-family-btn {
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: opacity 0.12s;
+  opacity: 0.65;
+}
+.wc-family-btn:hover { opacity: 0.9; }
+.wc-family-btn.wc-family-active { opacity: 1; box-shadow: 0 0 8px rgba(255,255,255,0.15); }
+
+/* Archetype list within selected family */
+.wc-arch-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
 .wc-arch-item {
-  padding: 4px 6px;
+  padding: 4px 8px;
   background: rgba(12, 30, 48, 0.7);
   border: 1px solid #142a3c;
   border-radius: 4px;
-  font-size: 9px;
+  font-size: 10px;
   color: #6b94ad;
   cursor: pointer;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
   transition: border-color 0.12s, color 0.12s;
 }
 .wc-arch-item:hover { border-color: #4488aa; color: #a0d0e8; }
@@ -262,6 +330,15 @@ const CSS = `
   color: #3a6a8a;
   text-align: center;
 }
+
+/* Exclusion warning */
+.wc-warn {
+  padding: 6px 13px;
+  font-size: 10px;
+  color: #ee8833;
+  text-align: center;
+  background: rgba(100,60,20,0.2);
+}
 `;
 
 const ZONE_TYPE_COLORS: Record<WeatherZoneType, { bg: string; border: string; color: string }> = {
@@ -269,6 +346,10 @@ const ZONE_TYPE_COLORS: Record<WeatherZoneType, { bg: string; border: string; co
   echo: { bg: 'rgba(180,60,100,0.15)', border: '#aa3366', color: '#cc4488' },
   ion:  { bg: 'rgba(60,180,100,0.15)', border: '#30aa66', color: '#44cc88' },
 };
+
+function hslStr(h: number, s: number, l: number): string {
+  return `hsl(${h},${s}%,${l}%)`;
+}
 
 export class WorldCreator {
   private container: HTMLDivElement;
@@ -281,6 +362,8 @@ export class WorldCreator {
   private selectedSourceId: string | null = null;
   private selectedZoneId: string | null = null;
   private existsOnServer = false;
+  private activeFamily: string | null = null;
+  private lastExclusionWarn = '';
 
   constructor(container: HTMLDivElement, callbacks: WorldCreatorCallbacks) {
     this.container = container;
@@ -317,26 +400,36 @@ export class WorldCreator {
   isPlacementActive(): boolean { return this.placement.kind !== 'none'; }
 
   /** Called by main.ts when user clicks on the sphere in create mode. */
-  handleSphereClick(pos: SphericalCoord): void {
+  handleSphereClick(pos: SphericalCoord): boolean {
     if (this.placement.kind === 'source') {
+      // Exclusion check: reject if too close to an existing source
+      for (const existing of this.builder.getSources()) {
+        if (chordDistance(pos, existing.position) < SOURCE_EXCLUSION_RADIUS) {
+          this.lastExclusionWarn = 'Too close to an existing source';
+          this.render();
+          return false;
+        }
+      }
+      this.lastExclusionWarn = '';
       this.builder.addSource(this.placement.archetypeName, pos);
-      this.placement = { kind: 'none' };
-      this.callbacks.onPlacementModeChange(false);
       this.callbacks.onWorldChanged();
       this.render();
+      return true;
     } else if (this.placement.kind === 'zone') {
+      this.lastExclusionWarn = '';
       const zone = this.builder.addZone(this.placement.zoneType, pos);
       this.selectedZoneId = zone.id;
-      this.placement = { kind: 'none' };
-      this.callbacks.onPlacementModeChange(false);
       this.callbacks.onWorldChanged();
       this.render();
+      return true;
     }
+    return false;
   }
 
   private cancelPlacement(): void {
     if (this.placement.kind !== 'none') {
       this.placement = { kind: 'none' };
+      this.lastExclusionWarn = '';
       this.callbacks.onPlacementModeChange(false);
     }
   }
@@ -355,6 +448,11 @@ export class WorldCreator {
       </div>`;
     }
 
+    // Exclusion warning
+    if (this.lastExclusionWarn) {
+      html += `<div class="wc-warn">${this.lastExclusionWarn}</div>`;
+    }
+
     // World name + action buttons
     html += `<div class="wc-section">
       <div class="wc-section-title">World</div>
@@ -368,43 +466,36 @@ export class WorldCreator {
 
     // Browse panel
     if (this.browseOpen) {
-      html += `<div class="wc-section">
-        <div class="wc-section-title">Public Worlds</div>
-        <div class="wc-browse-list">`;
-      if (this.browseWorlds.length === 0) {
-        html += `<div style="color:#3a6a8a;font-size:11px;padding:8px;">No worlds saved yet</div>`;
-      }
-      const myId = getAuthorId();
-      for (const w of this.browseWorlds) {
-        const isMine = w.authorId === myId;
-        html += `<div class="wc-browse-row">
-          <div class="wc-browse-info">
-            <div class="wc-browse-name">${this.escapeHtml(w.name)}</div>
-            <div class="wc-browse-meta">${w.sourceCount} sources, ${w.zoneCount} zones${isMine ? ' (yours)' : ''}</div>
-          </div>
-          <div class="wc-browse-actions">
-            <button class="wc-btn" data-action="load-world" data-id="${w.id}" style="min-width:40px;flex:none;padding:4px 8px;">Load</button>
-            ${isMine ? `<button class="wc-btn wc-btn-danger" data-action="delete-world" data-id="${w.id}" style="min-width:32px;flex:none;padding:4px 8px;">Del</button>` : ''}
-          </div>
-        </div>`;
-      }
-      html += `</div></div>`;
+      html += this.renderBrowsePanel();
     }
 
-    // Sources section
+    // Sources section with family selector
     html += `<div class="wc-section">
       <div class="wc-section-title">Sources (${this.builder.getSources().length})</div>
-      <div class="wc-arch-grid">`;
-    // Group archetypes by engine
-    const engines = ['subtractive', 'noise', 'fm', 'resonator'] as const;
-    for (const engine of engines) {
-      const archs = ARCHETYPES.filter(a => (a.engine ?? 'subtractive') === engine);
-      for (const arch of archs) {
-        const isSelected = this.placement.kind === 'source' && this.placement.archetypeName === arch.name;
-        html += `<div class="wc-arch-item${isSelected ? ' wc-arch-selected' : ''}" data-action="pick-archetype" data-name="${arch.name}" title="${arch.name} (${engine})">${arch.name}</div>`;
-      }
+      <div class="wc-family-grid">`;
+    for (const fam of FAMILIES) {
+      const isActive = this.activeFamily === fam.name;
+      const bg = hslStr(fam.hue, 40, 18);
+      const border = hslStr(fam.hue, 60, 45);
+      const color = hslStr(fam.hue, 75, 70);
+      html += `<button class="wc-family-btn${isActive ? ' wc-family-active' : ''}" data-action="pick-family" data-family="${fam.name}" style="background:${bg};border-color:${border};color:${color};">${fam.name}</button>`;
     }
     html += `</div>`;
+
+    // Show archetypes for selected family
+    if (this.activeFamily) {
+      const fam = FAMILIES.find(f => f.name === this.activeFamily);
+      if (fam) {
+        html += `<div class="wc-arch-list">`;
+        for (const archName of fam.archetypes) {
+          const isSelected = this.placement.kind === 'source' && this.placement.archetypeName === archName;
+          const color = hslStr(fam.hue, 75, isSelected ? 75 : 60);
+          const borderColor = isSelected ? hslStr(fam.hue, 80, 65) : '#142a3c';
+          html += `<div class="wc-arch-item${isSelected ? ' wc-arch-selected' : ''}" data-action="pick-archetype" data-name="${archName}" style="color:${color};border-color:${borderColor};">${archName}</div>`;
+        }
+        html += `</div>`;
+      }
+    }
 
     // Placed sources list
     const sources = this.builder.getSources();
@@ -412,8 +503,10 @@ export class WorldCreator {
       html += `<div class="wc-item-list">`;
       for (const src of sources) {
         const isSelected = this.selectedSourceId === src.id;
+        const hue = hashString(src.archetypeName) % 360;
+        const dotColor = hslStr(hue, 80, 60);
         html += `<div class="wc-item-row${isSelected ? ' wc-item-selected' : ''}" data-action="select-source" data-id="${src.id}">
-          <div class="wc-item-dot" style="background:#4488cc;"></div>
+          <div class="wc-item-dot" style="background:${dotColor};"></div>
           <span class="wc-item-name">${this.escapeHtml(src.archetypeName)}</span>
           <span style="font-size:9px;color:#4a7a96;">${src.position.lat.toFixed(0)},${src.position.lon.toFixed(0)}</span>
           <button class="wc-item-del" data-action="del-source" data-id="${src.id}">&times;</button>
@@ -469,6 +562,31 @@ export class WorldCreator {
     this.bindEvents();
   }
 
+  private renderBrowsePanel(): string {
+    let html = `<div class="wc-section">
+      <div class="wc-section-title">Public Worlds</div>
+      <div class="wc-browse-list">`;
+    if (this.browseWorlds.length === 0) {
+      html += `<div style="color:#3a6a8a;font-size:11px;padding:8px;">No worlds saved yet</div>`;
+    }
+    const myId = getAuthorId();
+    for (const w of this.browseWorlds) {
+      const isMine = w.authorId === myId;
+      html += `<div class="wc-browse-row">
+        <div class="wc-browse-info">
+          <div class="wc-browse-name">${this.escapeHtml(w.name)}</div>
+          <div class="wc-browse-meta">${w.sourceCount} sources, ${w.zoneCount} zones${isMine ? ' (yours)' : ''}</div>
+        </div>
+        <div class="wc-browse-actions">
+          <button class="wc-btn" data-action="load-world" data-id="${w.id}" style="min-width:40px;flex:none;padding:4px 8px;">Load</button>
+          ${isMine ? `<button class="wc-btn wc-btn-danger" data-action="delete-world" data-id="${w.id}" style="min-width:32px;flex:none;padding:4px 8px;">Del</button>` : ''}
+        </div>
+      </div>`;
+    }
+    html += `</div></div>`;
+    return html;
+  }
+
   private renderZoneSliders(id: string, radius: number, feather: number, intensity: number): string {
     return `<div style="padding:4px 6px 8px 20px;">
       <div class="wc-slider-row">
@@ -513,16 +631,28 @@ export class WorldCreator {
           this.existsOnServer = false;
           this.selectedSourceId = null;
           this.selectedZoneId = null;
+          this.activeFamily = null;
           this.cancelPlacement();
           this.callbacks.onWorldChanged();
           this.render();
           break;
+        case 'pick-family': {
+          const fam = target.dataset.family!;
+          this.activeFamily = this.activeFamily === fam ? null : fam;
+          // If deselecting family, also cancel any source placement from that family
+          if (!this.activeFamily && this.placement.kind === 'source') {
+            this.cancelPlacement();
+          }
+          this.render();
+          break;
+        }
         case 'pick-archetype': {
           const name = target.dataset.name!;
           if (this.placement.kind === 'source' && this.placement.archetypeName === name) {
             this.cancelPlacement();
           } else {
             this.placement = { kind: 'source', archetypeName: name };
+            this.lastExclusionWarn = '';
             this.callbacks.onPlacementModeChange(true);
           }
           this.render();
@@ -534,6 +664,7 @@ export class WorldCreator {
             this.cancelPlacement();
           } else {
             this.placement = { kind: 'zone', zoneType: type };
+            this.lastExclusionWarn = '';
             this.callbacks.onPlacementModeChange(true);
           }
           this.render();
@@ -587,8 +718,8 @@ export class WorldCreator {
         const param = input.dataset.param!;
         let value = Number(input.value);
         if (param === 'intensity') value /= 100;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.builder.updateZoneParam(id, param as any, value);
-        // Update the value display
         const valSpan = input.nextElementSibling as HTMLSpanElement;
         if (valSpan) {
           if (param === 'intensity') valSpan.textContent = `${Math.round(value * 100)}%`;
@@ -631,6 +762,7 @@ export class WorldCreator {
       this.existsOnServer = true;
       this.selectedSourceId = null;
       this.selectedZoneId = null;
+      this.activeFamily = null;
       this.cancelPlacement();
       this.browseOpen = false;
       this.callbacks.onWorldChanged();
