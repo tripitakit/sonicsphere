@@ -313,7 +313,7 @@ async function bootstrap(): Promise<void> {
   }
 
   function updateEditWorldButton(): void {
-    editWorldTrigger?.classList.toggle('visible', playingUserWorld && !createMode && !paused);
+    editWorldTrigger?.classList.toggle('visible', createMode);
   }
 
   function exitCreateMode(play: boolean): void {
@@ -321,6 +321,7 @@ async function bootstrap(): Promise<void> {
     createMode = false;
     createNavTarget = null;
     worldCreator.close();
+    updateEditWorldButton();
     if (play) {
       const builder = worldCreator.getBuilder();
       if (!builder.isEmpty()) {
