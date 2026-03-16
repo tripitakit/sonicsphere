@@ -722,6 +722,11 @@ export class WeatherZoneEngine {
     this.zones = externalZones ?? this.generateZones(seed, zoneCount);
   }
 
+  /** Returns all zone models (for minimap display). */
+  getAllZones(): readonly WeatherZoneModel[] {
+    return this.zones;
+  }
+
   static fromUserZones(defs: UserZoneDef[]): WeatherZoneEngine {
     const TAU_LOCAL = Math.PI * 2;
     const models: WeatherZoneModel[] = defs.map((d) => ({

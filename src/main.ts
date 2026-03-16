@@ -759,6 +759,7 @@ async function bootstrap(): Promise<void> {
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
         createMode || editModeActive,
+        weather.getAllZones(),
       );
       // In create mode, draw preview glyphs and nav target
       if (createMode) {
