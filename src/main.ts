@@ -233,6 +233,7 @@ async function bootstrap(): Promise<void> {
 
   // ── Create World mode ─────────────────────────────────────────────────────
   let createMode = false;
+  let createModeSuspended = false; // true when create mode was paused via ESC
   let playingUserWorld = false;  // true when listening to a user-created world
   let editModeActive = false;   // true only when world was started via "Play This World" in creator
   let createNavTarget: { lat: number; lon: number } | null = null;
@@ -565,9 +566,30 @@ async function bootstrap(): Promise<void> {
 
     if (e.code === 'Escape') {
       e.preventDefault();
-      if (createMode) { stopPreview(); stopPrehear(); exitCreateMode(false); return; }
-      if (paused) void resumeExperience();
-      else void pauseExperience();
+      if (createMode) {
+        // Pause from create mode — suspend it, show overlay
+        createModeSuspended = true;
+        paused = true;
+        stopPreview();
+        stopPrehear();
+        worldCreator.close();
+        void audio.stop();
+        setOverlay('paused');
+        return;
+      }
+      if (paused) {
+        // Resume — if was in create mode, re-enter it
+        if (createModeSuspended) {
+          createModeSuspended = false;
+          paused = false;
+          overlay.classList.add('hidden');
+          worldCreator.toggle();
+          return;
+        }
+        void resumeExperience();
+      } else {
+        void pauseExperience();
+      }
       return;
     }
 
@@ -603,6 +625,14 @@ async function bootstrap(): Promise<void> {
 
   // User gesture gate: click to start/resume audio.
   overlay.addEventListener('click', () => {
+    if (createModeSuspended) {
+      // Resume back into create mode
+      createModeSuspended = false;
+      paused = false;
+      overlay.classList.add('hidden');
+      worldCreator.toggle();
+      return;
+    }
     editModeActive = false; // overlay resume = exploration mode, not edit mode
     void resumeExperience();
   });
