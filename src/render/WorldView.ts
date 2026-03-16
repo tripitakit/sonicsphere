@@ -59,7 +59,7 @@ const DEG = Math.PI / 180;
 const RAD = 180 / Math.PI;
 const DIRECTION_PICK_DEADZONE_PX = 18;
 const SOURCE_PICK_RADIUS_PX = 18;
-const MINIMAP_RADIUS = 80; // 2× compass radius
+const MINIMAP_RADIUS = 60;
 
 type GridStroke = { color: number; alpha: number; width: number };
 type ArchetypePalette = {
@@ -912,13 +912,8 @@ export class WorldView {
       g.rect(cx + px, cy + py, 1, 1).fill({ color: palette.body, alpha: 1 });
     }
 
-    // Player gizmo at center
+    // Player gizmo at center — simple circle
     g.circle(cx, cy, 3).fill({ color: 0xffc27d, alpha: 0.95 });
-    g.moveTo(cx, cy - 7)
-      .lineTo(cx - 2.5, cy - 3)
-      .lineTo(cx + 2.5, cy - 3)
-      .closePath()
-      .fill({ color: 0xffc27d, alpha: 0.85 });
   }
 
   private updateViewScale(screenW: number, screenH: number): void {
