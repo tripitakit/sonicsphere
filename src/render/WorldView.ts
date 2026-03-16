@@ -506,8 +506,9 @@ export class WorldView {
       coordBottomY = compassBottom + th + padY;
     }
 
-    // Minimap sphere
-    this.drawMinimap(playerPos, playerHeading, sources, allZonesForMinimap, screenW, screenH);
+    // Minimap sphere — below compass & coords, aligned with compass center
+    const compassCxForMinimap = Math.max(64, screenW - 78);
+    this.drawMinimap(playerPos, playerHeading, sources, allZonesForMinimap, compassCxForMinimap, coordBottomY + 8);
 
     // In exploration mode: show 3 preset buttons, hide single FX editor button
     // In create mode or when FX overlay is open: show single FX button, hide presets
@@ -850,8 +851,8 @@ export class WorldView {
     playerHeading: number,
     sources: readonly SoundSource[],
     allZones: readonly { center: SphericalCoord; radiusDeg: number; type: WeatherZoneType }[],
-    screenW: number,
-    screenH: number,
+    anchorCx: number,
+    anchorTopY: number,
   ): void {
     const ZONE_COLORS: Record<WeatherZoneType, number> = {
       mist: 0xcc8830,
@@ -862,8 +863,8 @@ export class WorldView {
     const mmScale = MINIMAP_RADIUS / SPHERE_RADIUS;
     const hemisphereClipY = -SPHERE_RADIUS;
 
-    const cx = screenW / 2;
-    const cy = screenH - MINIMAP_RADIUS - 12;
+    const cx = anchorCx;
+    const cy = anchorTopY + MINIMAP_RADIUS;
 
     // Update circular clip mask
     this.minimapMask.clear();
@@ -874,9 +875,8 @@ export class WorldView {
 
     // Fully opaque black background
     g.circle(cx, cy, MINIMAP_RADIUS).fill({ color: 0x000000, alpha: 1 });
-    // Border
-    g.circle(cx, cy, MINIMAP_RADIUS).stroke({ color: 0x9bbfd6, alpha: 0.4, width: 1.5 });
-    g.circle(cx, cy, MINIMAP_RADIUS + 3).stroke({ color: 0x35566d, alpha: 0.55, width: 1 });
+    // Border — grey-blue, thick
+    g.circle(cx, cy, MINIMAP_RADIUS).stroke({ color: 0x6b8a9e, alpha: 0.7, width: 2.5 });
 
     // Equator line (dotted great circle at lat=0) — near hemisphere only
     for (let lon = -180; lon < 180; lon += 4) {
