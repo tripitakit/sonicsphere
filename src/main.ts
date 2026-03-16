@@ -447,29 +447,31 @@ async function bootstrap(): Promise<void> {
     if (!paused || transitionInFlight) return;
     transitionInFlight = true;
     try {
-      // If a user world is selected in the overlay, load it
-      if (selectedWorldId !== null) {
-        try {
-          const def = await getWorld(selectedWorldId);
-          world.dispose();
-          const userSources = def.sources.map(s => ({ ...s }));
-          world = SphereWorld.fromUserSources(userSources);
-          const userZones = def.zones?.map(z => ({ ...z })) ?? [];
-          weather = WeatherZoneEngine.fromUserZones(userZones);
-          latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
-          playingUserWorld = true;
-        } catch (err) {
-          console.error('Failed to load selected world, using default:', err);
-          playingUserWorld = false;
-        }
-      } else {
-        // Default world — if currently playing a user world, rebuild default
-        if (playingUserWorld) {
-          world.dispose();
-          world = new SphereWorld();
-          weather = new WeatherZoneEngine();
-          latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
-          playingUserWorld = false;
+      // Skip server load if world was already built from builder (editModeActive)
+      if (!editModeActive) {
+        if (selectedWorldId !== null) {
+          try {
+            const def = await getWorld(selectedWorldId);
+            world.dispose();
+            const userSources = def.sources.map(s => ({ ...s }));
+            world = SphereWorld.fromUserSources(userSources);
+            const userZones = def.zones?.map(z => ({ ...z })) ?? [];
+            weather = WeatherZoneEngine.fromUserZones(userZones);
+            latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
+            playingUserWorld = true;
+          } catch (err) {
+            console.error('Failed to load selected world, using default:', err);
+            playingUserWorld = false;
+          }
+        } else {
+          // Default world — if currently playing a user world, rebuild default
+          if (playingUserWorld) {
+            world.dispose();
+            world = new SphereWorld();
+            weather = new WeatherZoneEngine();
+            latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
+            playingUserWorld = false;
+          }
         }
       }
       await audio.start();
