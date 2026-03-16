@@ -13,6 +13,13 @@ export async function listWorlds(limit = 50, offset = 0): Promise<WorldSummary[]
   return res.json();
 }
 
+/** List only worlds created by the current user. */
+export async function listMyWorlds(limit = 50, offset = 0): Promise<WorldSummary[]> {
+  const all = await listWorlds(limit, offset);
+  const myId = getAuthorId();
+  return all.filter(w => w.authorId === myId);
+}
+
 export async function getWorld(id: string): Promise<WorldDef> {
   const res = await fetch(`${BASE}/${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`getWorld failed: ${res.status}`);

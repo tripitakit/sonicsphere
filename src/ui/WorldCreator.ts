@@ -3,6 +3,7 @@ import { ARCHETYPES } from '../audio/archetypes.ts';
 import { WorldBuilder } from '../engine/WorldBuilder.ts';
 import { chordDistance } from '../engine/sphereMath.ts';
 import * as api from '../api/WorldApi.ts';
+import { listMyWorlds } from '../api/WorldApi.ts';
 import { getAuthorId } from '../api/authorId.ts';
 
 export interface WorldCreatorCallbacks {
@@ -574,22 +575,20 @@ export class WorldCreator {
 
   private renderBrowsePanel(): string {
     let html = `<div class="wc-section">
-      <div class="wc-section-title">Public Worlds</div>
+      <div class="wc-section-title">My Worlds</div>
       <div class="wc-browse-list">`;
     if (this.browseWorlds.length === 0) {
       html += `<div style="color:#3a6a8a;font-size:13px;padding:10px;">No worlds saved yet</div>`;
     }
-    const myId = getAuthorId();
     for (const w of this.browseWorlds) {
-      const isMine = w.authorId === myId;
       html += `<div class="wc-browse-row">
         <div class="wc-browse-info">
           <div class="wc-browse-name">${this.escapeHtml(w.name)}</div>
-          <div class="wc-browse-meta">${w.sourceCount} sources, ${w.zoneCount} zones${isMine ? ' (yours)' : ''}</div>
+          <div class="wc-browse-meta">${w.sourceCount} sources, ${w.zoneCount} zones</div>
         </div>
         <div class="wc-browse-actions">
           <button class="wc-btn" data-action="load-world" data-id="${w.id}" style="min-width:48px;flex:none;padding:5px 10px;">Load</button>
-          ${isMine ? `<button class="wc-btn wc-btn-danger" data-action="delete-world" data-id="${w.id}" style="min-width:38px;flex:none;padding:5px 10px;">Del</button>` : ''}
+          <button class="wc-btn wc-btn-danger" data-action="delete-world" data-id="${w.id}" style="min-width:38px;flex:none;padding:5px 10px;">Del</button>
         </div>
       </div>`;
     }
@@ -769,7 +768,9 @@ export class WorldCreator {
 
   private async loadBrowseList(): Promise<void> {
     try {
-      this.browseWorlds = await api.listWorlds();
+      this.browseWorlds = await listMyWorlds();
+      // Sort newest first
+      this.browseWorlds.sort((a, b) => b.createdAt - a.createdAt);
     } catch (err) {
       console.error('Failed to load world list:', err);
       this.browseWorlds = [];

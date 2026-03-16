@@ -295,10 +295,23 @@ export class WorldView {
   private soundHorizonPx = HEARING_RADIUS * BASELINE_WORLD_SCALE;
   private worldHorizonPx = SPHERE_RADIUS * BASELINE_WORLD_SCALE;
 
+  // Weather preset buttons (3×: subtle / experimental / extreme)
+  private fxPresetBtns: PIXI.Container[] = [];
+  private fxPresetBgs: PIXI.Graphics[] = [];
+  private fxPresetIcons: PIXI.Graphics[] = [];
+  private fxPresetPressedMs: number[] = [0, 0, 0];
+  private onChangeWeatherPreset: ((idx: number) => void) | null = null;
+  // Coordinate readout (below compass)
+  private coordBg: PIXI.Graphics;
+  private coordLat: PIXI.Text;
+  private coordLon: PIXI.Text;
+
   constructor(
     stage: PIXI.Container,
     onToggleFxOverlay: () => void,
+    onChangeWeatherPreset?: (idx: number) => void,
   ) {
+    this.onChangeWeatherPreset = onChangeWeatherPreset ?? null;
     // Layer order (bottom → top):
     //   background   — full-screen void colour, audio-reactive tint
     //   zones        — filled discs for world/sonic surfaces
@@ -359,11 +372,55 @@ export class WorldView {
     });
     stage.addChild(this.fxBtn);
 
+    // 3 weather preset buttons: increasing intensity (zone-colored circles)
+    const PRESET_X_CENTERS = [22, 62, 102] as const;
+    const PRESET_R = 16;
+    for (let i = 0; i < 3; i++) {
+      const btn = new PIXI.Container();
+      const bg = new PIXI.Graphics();
+      const icon = new PIXI.Graphics();
+      btn.addChild(bg);
+      btn.addChild(icon);
+      btn.x = PRESET_X_CENTERS[i]!;
+      btn.eventMode = 'static';
+      btn.cursor = 'pointer';
+      btn.hitArea = new PIXI.Circle(0, 0, PRESET_R + 4);
+      btn.visible = false; // hidden by default, shown in exploration mode
+      const idx = i;
+      btn.on('pointerdown', (e) => {
+        e.stopPropagation();
+        this.fxPresetPressedMs[idx] = Date.now();
+        this.onChangeWeatherPreset?.(idx);
+      });
+      stage.addChild(btn);
+      this.fxPresetBtns.push(btn);
+      this.fxPresetBgs.push(bg);
+      this.fxPresetIcons.push(icon);
+    }
+
     this.playerDot = new PIXI.Graphics();
     stage.addChild(this.playerDot);
 
     this.navTarget = new PIXI.Graphics();
     stage.addChild(this.navTarget);
+
+    // Coordinate readout — positioned below compass in update()
+    this.coordBg = new PIXI.Graphics();
+    stage.addChild(this.coordBg);
+    const coordStyle = {
+      fontFamily: '"Space Mono", "IBM Plex Mono", "Menlo", monospace',
+      fontSize: 13,
+      fontWeight: 'bold' as const,
+      letterSpacing: 0.8,
+    };
+    this.coordLat = new PIXI.Text({ text: '', style: { ...coordStyle, fill: 0x55eedd } });
+    this.coordLat.anchor.set(1, 0); // right-aligned (left of center gap)
+    this.coordLat.alpha = 0.82;
+    stage.addChild(this.coordLat);
+    this.coordLon = new PIXI.Text({ text: '', style: { ...coordStyle, fill: 0xeedd55 } });
+    this.coordLon.anchor.set(0, 0); // left-aligned (right of center gap)
+    this.coordLon.alpha = 0.82;
+    stage.addChild(this.coordLon);
   }
 
   update(
@@ -379,6 +436,7 @@ export class WorldView {
     weatherProfileIdx = 1,
     fxOverlayOpen = false,
     selectedSourceId: string | null = null,
+    isCreateMode = false,
   ): void {
     const cx = screenW / 2;
     const cy = screenH / 2;
@@ -403,9 +461,52 @@ export class WorldView {
     this.drawVisibleWorldHorizon(cx, cy);
     this.drawHorizons(cx, cy, audibleCount, elapsed);
     this.drawTopRightCompass(screenW, playerHeading);
-    // Anchor FX button to bottom-left: centre 44px above bottom edge
+
+    // Coordinate readout below compass
+    {
+      const compassCx = Math.max(64, screenW - 78);
+      const compassBottom = 78 + 49 + 10; // cy + radius+9 + gap
+      const latSign = playerPos.lat >= 0 ? 'N' : 'S';
+      const lonSign = playerPos.lon >= 0 ? 'E' : 'W';
+      this.coordLat.text = Math.abs(playerPos.lat).toFixed(1) + '\u00B0' + latSign;
+      this.coordLon.text = Math.abs(playerPos.lon).toFixed(1) + '\u00B0' + lonSign;
+      const gap = 6; // pixels between lat and lon
+      this.coordLat.x = compassCx - gap / 2;
+      this.coordLat.y = compassBottom;
+      this.coordLon.x = compassCx + gap / 2;
+      this.coordLon.y = compassBottom;
+      // Dark pill behind both texts
+      const totalW = this.coordLat.width + gap + this.coordLon.width;
+      const th = Math.max(this.coordLat.height, this.coordLon.height);
+      const padX = 8;
+      const padY = 3;
+      this.coordBg.clear();
+      this.coordBg.roundRect(
+        compassCx - totalW / 2 - padX,
+        compassBottom - padY,
+        totalW + padX * 2,
+        th + padY * 2,
+        6,
+      ).fill({ color: 0x050b14, alpha: 0.3 });
+    }
+
+    // In exploration mode: show 3 preset buttons, hide single FX editor button
+    // In create mode or when FX overlay is open: show single FX button, hide presets
+    const showPresets = !isCreateMode && !fxOverlayOpen;
+    this.fxBtn.visible = !showPresets;
     this.fxBtn.y = screenH - 44;
-    this.drawFxButton(weatherProfileIdx, fxOverlayOpen, elapsed);
+    if (!showPresets) {
+      this.drawFxButton(weatherProfileIdx, fxOverlayOpen, elapsed);
+    }
+    // Draw 3 preset buttons
+    for (let i = 0; i < 3; i++) {
+      this.fxPresetBtns[i]!.visible = showPresets;
+      if (showPresets) {
+        this.fxPresetBtns[i]!.y = screenH - 44;
+        this.drawFxPresetButton(i, weatherProfileIdx, elapsed);
+      }
+    }
+
     this.drawPlayerDot(cx, cy, directionAngleDeg, manualOverrideProgress);
 
     // Draw each source
@@ -681,6 +782,47 @@ export class WorldView {
     this.fxBtnIcon.circle(0, 0, dotR).fill({ color: iconColor, alpha: drawAlpha });
     for (const r of rings) {
       this.fxBtnIcon.circle(0, 0, r).stroke({ color: iconColor, alpha: drawAlpha, width: 1.6 });
+    }
+  }
+
+  private drawFxPresetButton(idx: number, activeProfileIdx: number, _elapsed: number): void {
+    // Zone-like colored circles: cyan (subtle), amber (experimental), red (extreme)
+    // Alpha decreasing = subtle is most transparent, extreme most opaque
+    const ZONE_COLORS = [0x55cccc, 0xccaa44, 0xcc4444] as const;
+    const RING_COUNTS = [1, 2, 3] as const; // rings suggest increasing intensity
+    const isActive = idx === activeProfileIdx;
+    const now = Date.now();
+    const flash = Math.max(0, 1 - (now - this.fxPresetPressedMs[idx]!) / 300);
+    const zoneColor = ZONE_COLORS[idx] ?? 0xccaa44;
+
+    const bg = this.fxPresetBgs[idx]!;
+    const icon = this.fxPresetIcons[idx]!;
+    bg.clear();
+    icon.clear();
+
+    // Background disc
+    const bgFill = flash > 0 ? 0x88ccff : 0x0a1f2e;
+    const bgAlpha = isActive ? 0.88 : 0.45 + 0.3 * flash;
+    bg.circle(0, 0, 16).fill({ color: bgFill, alpha: bgAlpha })
+      .stroke({ color: zoneColor, alpha: isActive ? 0.9 : 0.35 + 0.4 * flash, width: 1.4 });
+
+    // Active glow ring
+    if (isActive) {
+      bg.circle(0, 0, 20).stroke({ color: zoneColor, alpha: 0.5, width: 2.2 });
+    } else if (flash > 0) {
+      bg.circle(0, 0, 19).stroke({ color: 0x88ccff, alpha: 0.4 * flash, width: 1.5 });
+    }
+
+    // Zone-style icon: filled circle + concentric rings (more rings = more intense)
+    const fillAlpha = isActive ? 0.85 : 0.4 + 0.25 * flash;
+    const ringCount = RING_COUNTS[idx]!;
+    // Inner filled dot
+    icon.circle(0, 0, 3.5).fill({ color: zoneColor, alpha: fillAlpha });
+    // Concentric rings outward
+    for (let r = 0; r < ringCount; r++) {
+      const radius = 6 + r * 3.2;
+      const ringAlpha = (fillAlpha * 0.7) * (1 - r * 0.25);
+      icon.circle(0, 0, radius).stroke({ color: zoneColor, alpha: ringAlpha, width: 1.3 });
     }
   }
 
@@ -1381,6 +1523,12 @@ export class WorldView {
     this.fxBtn.destroy();
     this.fxBtnBg.destroy();
     this.fxBtnIcon.destroy();
+    for (const btn of this.fxPresetBtns) btn.destroy();
+    for (const bg of this.fxPresetBgs) bg.destroy();
+    for (const icon of this.fxPresetIcons) icon.destroy();
+    this.coordBg.destroy();
+    this.coordLat.destroy();
+    this.coordLon.destroy();
     this.playerDot.destroy();
     this.topCompass.destroy();
     this.horizons.destroy();

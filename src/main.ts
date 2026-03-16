@@ -26,6 +26,7 @@ import { WorldCreator } from './ui/WorldCreator.ts';
 import { ARCHETYPES } from './audio/archetypes.ts';
 import type { PlayerState, SoundArchetype, SourceVariation } from './types.ts';
 import { SourceSynth } from './audio/SourceSynth.ts';
+import { listWorlds, getWorld } from './api/WorldApi.ts';
 
 /** Apply persisted archetype overrides onto the ARCHETYPES array before world construction. */
 function applyArchetypeOverrides(overrides: ReturnType<typeof loadArchetypeOverrides>): void {
@@ -89,6 +90,7 @@ async function bootstrap(): Promise<void> {
   const weatherEditorContainer = document.getElementById('weather-editor') as HTMLDivElement;
   const worldCreatorContainer = document.getElementById('world-creator') as HTMLDivElement;
   const editWorldTrigger = document.getElementById('edit-world-trigger') as HTMLButtonElement | null;
+  const overlayWorldSelector = document.getElementById('overlay-world-selector') as HTMLDivElement | null;
 
   // Snapshot original archetype defaults BEFORE applying any persisted overrides,
   // so the reset function can restore the pristine values.
@@ -145,6 +147,14 @@ async function bootstrap(): Promise<void> {
   const worldView = new WorldView(
     renderer.stage,
     () => { pixiBtnConsumed = true; toggleWeatherEditor(); },
+    (idx: number) => {
+      pixiBtnConsumed = true;
+      const name = WEATHER_FX_PROFILE_NAMES[idx];
+      if (!name) return;
+      weatherProfileIdx = idx;
+      setWeatherFxProfile(name);
+      saveWeatherProfileName(name);
+    },
   );
 
   // Archetype editor
@@ -320,6 +330,7 @@ async function bootstrap(): Promise<void> {
         weather = WeatherZoneEngine.fromUserZones(builder.getZones().map(z => ({ ...z })));
         latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
         playingUserWorld = true;
+        selectedWorldId = builder.getWorldId() || null;
       }
       // paused was set to false in enterCreateMode; reset it so resumeExperience works
       paused = true;
@@ -363,6 +374,43 @@ async function bootstrap(): Promise<void> {
     });
   }
 
+  // ── Overlay world selector ──────────────────────────────────────────────
+  let selectedWorldId: string | null = null; // null = default world
+
+  function renderWorldSelector(worlds: Array<{ id: string | null; name: string }>): void {
+    if (!overlayWorldSelector) return;
+    overlayWorldSelector.innerHTML = '';
+    for (const w of worlds) {
+      const pill = document.createElement('button');
+      pill.className = 'overlay-world-pill' + (w.id === selectedWorldId ? ' selected' : '');
+      pill.textContent = w.name;
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation(); // don't trigger overlay resume
+        selectedWorldId = w.id;
+        // Update selected state
+        overlayWorldSelector.querySelectorAll('.overlay-world-pill').forEach((el, i) => {
+          el.classList.toggle('selected', worlds[i]!.id === selectedWorldId);
+        });
+      });
+      overlayWorldSelector.appendChild(pill);
+    }
+  }
+
+  async function refreshWorldSelector(): Promise<void> {
+    const entries: Array<{ id: string | null; name: string }> = [
+      { id: null, name: 'SonicSphereDefault' },
+    ];
+    try {
+      const all = await listWorlds();
+      // Sort newest first
+      all.sort((a, b) => b.createdAt - a.createdAt);
+      for (const w of all) entries.push({ id: w.id, name: w.name });
+    } catch (err) {
+      console.error('Failed to fetch world list for selector:', err);
+    }
+    renderWorldSelector(entries);
+  }
+
   function setOverlay(mode: 'start' | 'paused'): void {
     if (overlayTitle) overlayTitle.textContent = 'Sonic Sphere';
     if (overlayHintControls) {
@@ -372,6 +420,8 @@ async function bootstrap(): Promise<void> {
       overlayHintPrimary.textContent = mode === 'start' ? 'click to enter' : 'paused - click or ESC to resume';
     }
     overlay.classList.remove('hidden');
+    // Refresh world selector each time overlay becomes visible
+    void refreshWorldSelector();
   }
 
   function toggleArchetypeEditor(): void {
@@ -388,6 +438,31 @@ async function bootstrap(): Promise<void> {
     if (!paused || transitionInFlight) return;
     transitionInFlight = true;
     try {
+      // If a user world is selected in the overlay, load it
+      if (selectedWorldId !== null) {
+        try {
+          const def = await getWorld(selectedWorldId);
+          world.dispose();
+          const userSources = def.sources.map(s => ({ ...s }));
+          world = SphereWorld.fromUserSources(userSources);
+          const userZones = def.zones?.map(z => ({ ...z })) ?? [];
+          weather = WeatherZoneEngine.fromUserZones(userZones);
+          latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
+          playingUserWorld = true;
+        } catch (err) {
+          console.error('Failed to load selected world, using default:', err);
+          playingUserWorld = false;
+        }
+      } else {
+        // Default world — if currently playing a user world, rebuild default
+        if (playingUserWorld) {
+          world.dispose();
+          world = new SphereWorld();
+          weather = new WeatherZoneEngine();
+          latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
+          playingUserWorld = false;
+        }
+      }
       await audio.start();
       paused = false;
       overlay.classList.add('hidden');
@@ -487,15 +562,7 @@ async function bootstrap(): Promise<void> {
 
     if (inInput) return;
 
-    if (e.code === 'KeyE' && !createMode) {
-      e.preventDefault();
-      toggleArchetypeEditor();
-    }
-
-    if (e.code === 'KeyZ' && !createMode) {
-      e.preventDefault();
-      toggleWeatherEditor();
-    }
+    // E and Z editors are disabled in exploration mode — only available via dev tools if needed
   });
 
   editorTrigger?.addEventListener('click', () => {
@@ -641,6 +708,7 @@ async function bootstrap(): Promise<void> {
         weatherProfileIdx,
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
+        createMode,
       );
       // In create mode, draw preview glyphs and nav target
       if (createMode) {

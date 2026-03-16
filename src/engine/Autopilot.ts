@@ -30,8 +30,8 @@ const SPEED_MULT_MIN = 0.3;
 const SPEED_MULT_MAX = 6.0;
 
 // Pole escape hysteresis: smoothly blend from wander to equator-seeking steering.
-const POLE_ESCAPE_START_LAT = 72; // start biasing away from poles
-const POLE_ESCAPE_FULL_LAT = 84;  // strong corrective steering
+const POLE_ESCAPE_START_LAT = 85; // start biasing away from poles
+const POLE_ESCAPE_FULL_LAT = 88;  // strong corrective steering
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
