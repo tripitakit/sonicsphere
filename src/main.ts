@@ -234,6 +234,7 @@ async function bootstrap(): Promise<void> {
   // ── Create World mode ─────────────────────────────────────────────────────
   let createMode = false;
   let playingUserWorld = false;  // true when listening to a user-created world
+  let editModeActive = false;   // true only when world was started via "Play This World" in creator
   let createNavTarget: { lat: number; lon: number } | null = null;
   const CREATE_NAV_SPEED = 6.0;        // forward multiplier (× PLAYER_SPEED)
   const CREATE_NAV_ARRIVAL = 5;        // chord distance arrival threshold
@@ -313,7 +314,13 @@ async function bootstrap(): Promise<void> {
   }
 
   function updateEditWorldButton(): void {
-    editWorldTrigger?.classList.toggle('visible', createMode);
+    // Show edit buttons only when in edit mode (world started via "Play This World")
+    const showEditUI = editModeActive && !createMode && !paused;
+    editWorldTrigger?.classList.toggle('visible', showEditUI);
+    // Show archetype editor trigger (⚙) only in edit mode
+    if (editorTrigger) {
+      editorTrigger.style.display = showEditUI ? 'flex' : 'none';
+    }
   }
 
   function exitCreateMode(play: boolean): void {
@@ -331,6 +338,7 @@ async function bootstrap(): Promise<void> {
         weather = WeatherZoneEngine.fromUserZones(builder.getZones().map(z => ({ ...z })));
         latestWeatherFrame = weather.update(worldElapsedSeconds(), player.getState().position);
         playingUserWorld = true;
+        editModeActive = true;
         selectedWorldId = builder.getWorldId() || null;
       }
       // paused was set to false in enterCreateMode; reset it so resumeExperience works
@@ -563,7 +571,15 @@ async function bootstrap(): Promise<void> {
 
     if (inInput) return;
 
-    // E and Z editors are disabled in exploration mode — only available via dev tools if needed
+    // E and Z editors available only in edit mode (world started via "Play This World")
+    if (e.code === 'KeyE' && editModeActive && !createMode) {
+      e.preventDefault();
+      toggleArchetypeEditor();
+    }
+    if (e.code === 'KeyZ' && editModeActive && !createMode) {
+      e.preventDefault();
+      toggleWeatherEditor();
+    }
   });
 
   editorTrigger?.addEventListener('click', () => {
@@ -571,7 +587,7 @@ async function bootstrap(): Promise<void> {
   });
 
   editWorldTrigger?.addEventListener('click', () => {
-    if (playingUserWorld && !createMode) {
+    if (editModeActive && !createMode) {
       enterCreateMode();
     }
   });
@@ -585,6 +601,7 @@ async function bootstrap(): Promise<void> {
 
   // User gesture gate: click to start/resume audio.
   overlay.addEventListener('click', () => {
+    editModeActive = false; // overlay resume = exploration mode, not edit mode
     void resumeExperience();
   });
 
@@ -709,7 +726,7 @@ async function bootstrap(): Promise<void> {
         weatherProfileIdx,
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
-        createMode,
+        createMode || editModeActive,
       );
       // In create mode, draw preview glyphs and nav target
       if (createMode) {
