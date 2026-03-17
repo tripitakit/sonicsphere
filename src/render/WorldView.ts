@@ -309,12 +309,15 @@ export class WorldView {
   // Minimap sphere (below coordinates)
   private minimapGfx: PIXI.Graphics;
   private minimapMask: PIXI.Graphics;
+  private minimapHit: PIXI.Container;
+  private compassHit: PIXI.Container;
   private _lastHeading = 0;
 
   constructor(
     stage: PIXI.Container,
     onToggleFxOverlay: () => void,
     onChangeWeatherPreset?: (idx: number) => void,
+    private onConsumePointer?: () => void,
   ) {
     this.onChangeWeatherPreset = onChangeWeatherPreset ?? null;
     // Layer order (bottom → top):
@@ -433,6 +436,19 @@ export class WorldView {
     this.minimapGfx.mask = this.minimapMask;
     stage.addChild(this.minimapGfx);
     stage.addChild(this.minimapMask);
+
+    // Invisible hit areas to block clicks on compass and minimap
+    this.compassHit = new PIXI.Container();
+    this.compassHit.eventMode = 'static';
+    this.compassHit.hitArea = new PIXI.Circle(0, 0, 49); // radius+9
+    this.compassHit.on('pointerdown', (e) => { e.stopPropagation(); this.onConsumePointer?.(); });
+    stage.addChild(this.compassHit);
+
+    this.minimapHit = new PIXI.Container();
+    this.minimapHit.eventMode = 'static';
+    this.minimapHit.hitArea = new PIXI.Circle(0, 0, MINIMAP_RADIUS + 4);
+    this.minimapHit.on('pointerdown', (e) => { e.stopPropagation(); this.onConsumePointer?.(); });
+    stage.addChild(this.minimapHit);
   }
 
   update(
@@ -508,7 +524,14 @@ export class WorldView {
 
     // Minimap sphere — below compass & coords, aligned with compass center
     const compassCxForMinimap = Math.max(64, screenW - 78);
-    this.drawMinimap(playerPos, playerHeading, sources, allZonesForMinimap, compassCxForMinimap, coordBottomY + 8);
+    const minimapTopY = coordBottomY + 8;
+    this.drawMinimap(playerPos, playerHeading, sources, allZonesForMinimap, compassCxForMinimap, minimapTopY);
+
+    // Update hit area positions for compass and minimap
+    this.compassHit.x = compassCxForMinimap;
+    this.compassHit.y = 78;
+    this.minimapHit.x = compassCxForMinimap;
+    this.minimapHit.y = minimapTopY + MINIMAP_RADIUS;
 
     // In exploration mode: show 3 preset buttons, hide single FX editor button
     // In create mode or when FX overlay is open: show single FX button, hide presets
@@ -875,26 +898,15 @@ export class WorldView {
 
     // Fully opaque black background
     g.circle(cx, cy, MINIMAP_RADIUS).fill({ color: 0x000000, alpha: 1 });
-    // Border — grey-blue, thick
-    g.circle(cx, cy, MINIMAP_RADIUS).stroke({ color: 0x6b8a9e, alpha: 0.7, width: 2.5 });
-
-    // Equator line (dotted great circle at lat=0) — near hemisphere only
-    for (let lon = -180; lon < 180; lon += 4) {
-      const dir = directionInPlayerFrame(playerPos, playerHeading, { lat: 0, lon });
-      if (dir.y < hemisphereClipY) continue;
-      const px = dir.x * mmScale;
-      const py = dir.z * mmScale;
-      if (px * px + py * py > MINIMAP_RADIUS * MINIMAP_RADIUS) continue;
-      g.circle(cx + px, cy + py, 0.5).fill({ color: 0x35566d, alpha: 0.3 });
-    }
 
     // All weather zones — filled circles, alpha 0.2, near hemisphere only
+    const mmR2 = MINIMAP_RADIUS * MINIMAP_RADIUS;
     for (const zone of allZones) {
       const dir = directionInPlayerFrame(playerPos, playerHeading, zone.center);
       if (dir.y < hemisphereClipY) continue;
       const px = dir.x * mmScale;
       const py = dir.z * mmScale;
-      if (px * px + py * py > MINIMAP_RADIUS * MINIMAP_RADIUS) continue;
+      if (px * px + py * py > mmR2) continue;
       const zonePxR = zone.radiusDeg * DEG * SPHERE_RADIUS * mmScale;
       const color = ZONE_COLORS[zone.type] ?? 0x888888;
       g.circle(cx + px, cy + py, Math.max(3, zonePxR))
@@ -907,13 +919,54 @@ export class WorldView {
       if (dir.y < hemisphereClipY) continue;
       const px = dir.x * mmScale;
       const py = dir.z * mmScale;
-      if (px * px + py * py > MINIMAP_RADIUS * MINIMAP_RADIUS) continue;
+      if (px * px + py * py > mmR2) continue;
       const palette = this.getArchetypePalette(source.getArchetypeName());
-      g.rect(cx + px, cy + py, 1, 1).fill({ color: palette.body, alpha: 1 });
+      g.rect(cx + px - 1, cy + py - 1, 2, 2).fill({ color: palette.body, alpha: 1 });
     }
 
     // Player gizmo at center — simple circle
     g.circle(cx, cy, 3).fill({ color: 0xffc27d, alpha: 0.95 });
+
+    // Graticule — drawn AFTER fills to avoid PixiJS path contamination
+    // Latitude lines
+    const lonStep = 2;
+    for (let lat = -60; lat <= 60; lat += GRID_LAT_STEP_DEG) {
+      const st = lat === 0
+        ? { color: GRID_COLOR_EQUATOR, alpha: 0.5, width: 2.5 }
+        : { color: GRID_COLOR_MINOR, alpha: 0.35, width: 2.5 };
+      let drawing = false;
+      for (let lon = -180; lon <= 180; lon += lonStep) {
+        const dir = directionInPlayerFrame(playerPos, playerHeading, { lat, lon });
+        if (dir.y < hemisphereClipY) { drawing = false; continue; }
+        const sx = dir.x * mmScale;
+        const sy = dir.z * mmScale;
+        if (sx * sx + sy * sy > mmR2) { drawing = false; continue; }
+        if (!drawing) { g.moveTo(cx + sx, cy + sy); drawing = true; }
+        else g.lineTo(cx + sx, cy + sy);
+      }
+      if (drawing) g.stroke(st);
+    }
+    // Longitude lines
+    const latStep = 2;
+    for (let lon = -180; lon < 180; lon += GRID_LON_STEP_DEG) {
+      const st = lon === 0
+        ? { color: GRID_COLOR_MAJOR, alpha: 0.45, width: 2.5 }
+        : { color: GRID_COLOR_MINOR, alpha: 0.35, width: 2.5 };
+      let drawing = false;
+      for (let lat = -90; lat <= 90; lat += latStep) {
+        const dir = directionInPlayerFrame(playerPos, playerHeading, { lat, lon });
+        if (dir.y < hemisphereClipY) { drawing = false; continue; }
+        const sx = dir.x * mmScale;
+        const sy = dir.z * mmScale;
+        if (sx * sx + sy * sy > mmR2) { drawing = false; continue; }
+        if (!drawing) { g.moveTo(cx + sx, cy + sy); drawing = true; }
+        else g.lineTo(cx + sx, cy + sy);
+      }
+      if (drawing) g.stroke(st);
+    }
+
+    // Border — grey-blue, thick (drawn last, on top)
+    g.circle(cx, cy, MINIMAP_RADIUS).stroke({ color: 0x6b8a9e, alpha: 0.7, width: 2.5 });
   }
 
   private updateViewScale(screenW: number, screenH: number): void {
@@ -1621,6 +1674,8 @@ export class WorldView {
     this.coordLon.destroy();
     this.minimapGfx.destroy();
     this.minimapMask.destroy();
+    this.minimapHit.destroy();
+    this.compassHit.destroy();
     this.playerDot.destroy();
     this.topCompass.destroy();
     this.horizons.destroy();

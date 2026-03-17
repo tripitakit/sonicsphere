@@ -155,6 +155,7 @@ async function bootstrap(): Promise<void> {
       setWeatherFxProfile(name);
       saveWeatherProfileName(name);
     },
+    () => { pixiBtnConsumed = true; },
   );
 
   // Archetype editor
@@ -759,7 +760,11 @@ async function bootstrap(): Promise<void> {
         weatherEditor.isOpen(),
         archetypeEditor.isOpen() ? archetypeEditor.getSelectedSourceId() : null,
         createMode || editModeActive,
-        weather.getAllZones(),
+        createMode
+          ? worldCreator.getBuilder().getZones().map(z => ({
+              center: z.center, radiusDeg: z.radiusDeg, type: z.type,
+            }))
+          : weather.getAllZones(),
       );
       // In create mode, draw preview glyphs and nav target
       if (createMode) {
