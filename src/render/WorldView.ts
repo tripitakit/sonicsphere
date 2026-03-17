@@ -932,8 +932,8 @@ export class WorldView {
     const lonStep = 2;
     for (let lat = -60; lat <= 60; lat += GRID_LAT_STEP_DEG) {
       const st = lat === 0
-        ? { color: GRID_COLOR_EQUATOR, alpha: 0.5, width: 2.5 }
-        : { color: GRID_COLOR_MINOR, alpha: 0.35, width: 2.5 };
+        ? { color: GRID_COLOR_EQUATOR, alpha: 0, width: 1 }
+        : { color: GRID_COLOR_MINOR, alpha: 0, width: 1 };
       let drawing = false;
       for (let lon = -180; lon <= 180; lon += lonStep) {
         const dir = directionInPlayerFrame(playerPos, playerHeading, { lat, lon });
@@ -950,8 +950,8 @@ export class WorldView {
     const latStep = 2;
     for (let lon = -180; lon < 180; lon += GRID_LON_STEP_DEG) {
       const st = lon === 0
-        ? { color: GRID_COLOR_MAJOR, alpha: 0.45, width: 2.5 }
-        : { color: GRID_COLOR_MINOR, alpha: 0.35, width: 2.5 };
+        ? { color: GRID_COLOR_MAJOR, alpha: 0, width: 1 }
+        : { color: GRID_COLOR_MINOR, alpha: 0, width: 1 };
       let drawing = false;
       for (let lat = -90; lat <= 90; lat += latStep) {
         const dir = directionInPlayerFrame(playerPos, playerHeading, { lat, lon });
