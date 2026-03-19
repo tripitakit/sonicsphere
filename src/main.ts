@@ -237,6 +237,7 @@ async function bootstrap(): Promise<void> {
   let createModeSuspended = false; // true when create mode was paused via ESC
   let playingUserWorld = false;  // true when listening to a user-created world
   let editModeActive = false;   // true only when world was started via "Play This World" in creator
+  let viewMode: '2d' | '3d' = '2d';
   let createNavTarget: { lat: number; lon: number } | null = null;
   const CREATE_NAV_SPEED = 6.0;        // forward multiplier (× PLAYER_SPEED)
   const CREATE_NAV_ARRIVAL = 5;        // chord distance arrival threshold
@@ -604,6 +605,12 @@ async function bootstrap(): Promise<void> {
     if (e.code === 'KeyZ' && editModeActive && !createMode) {
       e.preventDefault();
       toggleWeatherEditor();
+    }
+    // V toggles 2D top-down ↔ 3D first-person wireframe view
+    if (e.code === 'KeyV' && !createMode && !paused) {
+      e.preventDefault();
+      viewMode = viewMode === '2d' ? '3d' : '2d';
+      worldView.setViewMode(viewMode);
     }
   });
 

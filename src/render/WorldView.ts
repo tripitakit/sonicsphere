@@ -10,6 +10,7 @@ import {
   toCartesian,
   unprojectScreenDelta,
 } from '../engine/sphereMath.ts';
+import { PerspectiveView } from './PerspectiveView.ts';
 
 // How many world units map to 1 pixel on screen.
 // Scene zoom set to 150% so world appears larger without browser zoom.
@@ -312,6 +313,9 @@ export class WorldView {
   private minimapHit: PIXI.Container;
   private compassHit: PIXI.Container;
   private _lastHeading = 0;
+  private viewMode: '2d' | '3d' = '2d';
+  private perspView: PerspectiveView;
+  private perspGfx: PIXI.Graphics;
 
   constructor(
     stage: PIXI.Container,
@@ -357,6 +361,12 @@ export class WorldView {
 
     this.horizons = new PIXI.Graphics();
     stage.addChild(this.horizons);
+
+    // 3D perspective layer — sits between world content and UI overlays
+    this.perspGfx = new PIXI.Graphics();
+    this.perspGfx.visible = false;
+    stage.addChild(this.perspGfx);
+    this.perspView = new PerspectiveView();
 
     this.topCompass = new PIXI.Graphics();
     stage.addChild(this.topCompass);
@@ -451,6 +461,23 @@ export class WorldView {
     stage.addChild(this.minimapHit);
   }
 
+  /** Toggle between 2D top-down and 3D first-person wireframe modes. */
+  setViewMode(mode: '2d' | '3d'): void {
+    this.viewMode = mode;
+  }
+
+  private setWorld2DLayersVisible(visible: boolean): void {
+    this.background.visible  = visible;
+    this.zones.visible       = visible;
+    this.weatherZones.visible = visible;
+    this.trail.visible       = visible;
+    this.grid.visible        = visible;
+    this.worldHorizon.visible = visible;
+    this.horizons.visible    = visible;
+    this.playerDot.visible   = visible;
+    this.container.visible   = visible;
+  }
+
   update(
     playerPos: SphericalCoord,
     playerHeading: number,
@@ -482,13 +509,21 @@ export class WorldView {
 
     const audibleCount = sources.filter((s) => s.isAudible()).length;
 
-    this.drawBackground(screenW, screenH, audibleCount);
-    this.drawZones(cx, cy, audibleCount, elapsed);
-    this.drawWeatherZones(playerPos, playerHeading, activeWeatherZones, cx, cy, elapsed, weatherProfileIdx);
-    this.drawPlayerTrail(playerPos, playerHeading, cx, cy, elapsed);
-    this.drawGraticule(playerPos, playerHeading, cx, cy);
-    this.drawVisibleWorldHorizon(cx, cy);
-    this.drawHorizons(cx, cy, audibleCount, elapsed);
+    if (this.viewMode === '3d') {
+      this.setWorld2DLayersVisible(false);
+      this.perspGfx.visible = true;
+      this.perspView.draw(this.perspGfx, sources, playerPos, playerHeading, elapsed, screenW, screenH, selectedSourceId);
+    } else {
+      this.setWorld2DLayersVisible(true);
+      this.perspGfx.visible = false;
+      this.drawBackground(screenW, screenH, audibleCount);
+      this.drawZones(cx, cy, audibleCount, elapsed);
+      this.drawWeatherZones(playerPos, playerHeading, activeWeatherZones, cx, cy, elapsed, weatherProfileIdx);
+      this.drawPlayerTrail(playerPos, playerHeading, cx, cy, elapsed);
+      this.drawGraticule(playerPos, playerHeading, cx, cy);
+      this.drawVisibleWorldHorizon(cx, cy);
+      this.drawHorizons(cx, cy, audibleCount, elapsed);
+    }
     this.drawTopRightCompass(screenW, playerHeading);
 
     // Coordinate readout below compass
@@ -550,9 +585,13 @@ export class WorldView {
       }
     }
 
+    if (this.viewMode === '3d') {
+      return; // 3D sources rendered by PerspectiveView; no player dot in first-person
+    }
+
     this.drawPlayerDot(cx, cy, directionAngleDeg, manualOverrideProgress);
 
-    // Draw each source
+    // Draw each source (2D mode only)
     const visible = this.visibleSourceIds;
     visible.clear();
     for (const source of sources) {
@@ -1685,5 +1724,6 @@ export class WorldView {
     this.weatherZones.destroy();
     this.zones.destroy();
     this.background.destroy();
+    this.perspGfx.destroy();
   }
 }
