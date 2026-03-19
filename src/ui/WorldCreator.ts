@@ -22,7 +22,7 @@ type PlacementMode =
 // ── Engine tabs ──────────────────────────────────────────────────────────────
 
 const ENGINE_TABS: { engine: SoundEngineType; label: string; color: string; border: string; bg: string }[] = [
-  { engine: 'subtractive', label: 'Synth',     color: '#7fb8d4', border: '#3388aa', bg: 'rgba(20,55,80,0.5)' },
+  { engine: 'subtractive', label: 'Subtractive', color: '#7fb8d4', border: '#3388aa', bg: 'rgba(20,55,80,0.5)' },
   { engine: 'noise',       label: 'Noise',     color: '#b8a47f', border: '#aa8833', bg: 'rgba(60,45,20,0.5)' },
   { engine: 'fm',          label: 'FM',        color: '#a47fb8', border: '#8833aa', bg: 'rgba(50,20,60,0.5)' },
   { engine: 'resonator',   label: 'Resonator', color: '#7fb8a4', border: '#33aa88', bg: 'rgba(20,60,45,0.5)' },
