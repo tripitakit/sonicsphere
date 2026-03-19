@@ -2,9 +2,10 @@ import type { SoundArchetype } from '../types.ts';
 
 export const ARCHETYPES: SoundArchetype[] = [
 
-  // ── WIND ──────────────────────────────────────────────────────────────────
+  // ── WIND (noise) ──────────────────────────────────────────────────────────
   {
     name: 'wind-gust',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 180,
     waveform: 'triangle',
     attack: 3, decay: 2, sustain: 0.6, release: 5,
@@ -13,6 +14,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'wind-howl',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 260,
     waveform: 'sine',
     attack: 4, decay: 3, sustain: 0.7, release: 6,
@@ -21,6 +23,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'wind-whisper',
+    engine: 'noise', noiseColor: 'white',
     frequency: 420,
     waveform: 'triangle',
     attack: 5, decay: 1, sustain: 0.5, release: 7,
@@ -29,6 +32,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'wind-low-drone',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 80,
     waveform: 'sine',
     attack: 6, decay: 2, sustain: 0.8, release: 8,
@@ -36,9 +40,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'lowpass', freq: 350, Q: 1.0 },
   },
 
-  // ── WATER ─────────────────────────────────────────────────────────────────
+  // ── WATER (noise + subtractive) ───────────────────────────────────────────
   {
     name: 'stream-babble',
+    engine: 'noise', noiseColor: 'white',
     frequency: 680,
     waveform: 'sine',
     attack: 0.5, decay: 0.3, sustain: 0.7, release: 2,
@@ -47,6 +52,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'river-flow',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 320,
     waveform: 'triangle',
     attack: 2, decay: 1, sustain: 0.8, release: 4,
@@ -71,6 +77,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'waterfall-roar',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 140,
     waveform: 'sawtooth',
     attack: 2, decay: 1, sustain: 0.9, release: 4,
@@ -78,9 +85,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'lowpass', freq: 600, Q: 0.7 },
   },
 
-  // ── DROPS ─────────────────────────────────────────────────────────────────
+  // ── DROPS (noise + resonator) ─────────────────────────────────────────────
   {
     name: 'rain-drop',
+    engine: 'noise', noiseColor: 'white',
     frequency: 1200,
     waveform: 'sine',
     attack: 0.005, decay: 0.4, sustain: 0.05, release: 0.8,
@@ -89,6 +97,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'rain-gentle',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 900,
     waveform: 'sine',
     attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5,
@@ -97,6 +106,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'cave-drip',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 660, resonatorFeedback: 0.88,
     frequency: 660,
     waveform: 'sine',
     attack: 0.003, decay: 1.2, sustain: 0.0, release: 1.5,
@@ -105,6 +115,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'puddle-plop',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 380, resonatorFeedback: 0.82,
     frequency: 380,
     waveform: 'sine',
     attack: 0.004, decay: 0.7, sustain: 0.0, release: 1.0,
@@ -112,9 +123,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 400, Q: 7 },
   },
 
-  // ── INSECTS ───────────────────────────────────────────────────────────────
+  // ── INSECTS (fm) ──────────────────────────────────────────────────────────
   {
     name: 'cricket-chirp',
+    engine: 'fm', fmHarmonicity: 2.0, fmModulationIndex: 8.5, fmModulationType: 'square',
     frequency: 4200,
     waveform: 'square',
     attack: 0.01, decay: 0.06, sustain: 0.4, release: 0.1,
@@ -123,6 +135,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'cicada-buzz',
+    engine: 'fm', fmHarmonicity: 1.8, fmModulationIndex: 12, fmModulationType: 'square',
     frequency: 3500,
     waveform: 'square',
     attack: 1.5, decay: 0.5, sustain: 0.8, release: 2,
@@ -131,6 +144,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'bee-drone',
+    engine: 'fm', fmHarmonicity: 1.5, fmModulationIndex: 6, fmModulationType: 'square',
     frequency: 250,
     waveform: 'square',
     attack: 0.3, decay: 0.2, sustain: 0.9, release: 1,
@@ -139,6 +153,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'mosquito-whine',
+    engine: 'fm', fmHarmonicity: 1.2, fmModulationIndex: 4, fmModulationType: 'triangle',
     frequency: 600,
     waveform: 'triangle',
     attack: 0.5, decay: 0.3, sustain: 0.8, release: 1.5,
@@ -147,6 +162,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'beetle-scrape',
+    engine: 'fm', fmHarmonicity: 3.1, fmModulationIndex: 9, fmModulationType: 'sawtooth',
     frequency: 180,
     waveform: 'sawtooth',
     attack: 0.05, decay: 0.15, sustain: 0.3, release: 0.4,
@@ -154,9 +170,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 200, Q: 5 },
   },
 
-  // ── BIRDS ─────────────────────────────────────────────────────────────────
+  // ── BIRDS (fm + resonator) ────────────────────────────────────────────────
   {
     name: 'songbird-trill',
+    engine: 'fm', fmHarmonicity: 2.5, fmModulationIndex: 5, fmModulationType: 'sine',
     frequency: 2800,
     waveform: 'sine',
     attack: 0.05, decay: 0.1, sustain: 0.6, release: 0.3,
@@ -165,6 +182,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'owl-hoot',
+    engine: 'fm', fmHarmonicity: 1.1, fmModulationIndex: 2, fmModulationType: 'sine',
     frequency: 220,
     waveform: 'sine',
     attack: 0.1, decay: 1.5, sustain: 0.3, release: 2.5,
@@ -173,6 +191,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'dove-coo',
+    engine: 'fm', fmHarmonicity: 1.3, fmModulationIndex: 3, fmModulationType: 'sine',
     frequency: 340,
     waveform: 'sine',
     attack: 0.08, decay: 0.8, sustain: 0.4, release: 1.5,
@@ -181,6 +200,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'hawk-cry',
+    engine: 'fm', fmHarmonicity: 2.8, fmModulationIndex: 7, fmModulationType: 'sawtooth',
     frequency: 1600,
     waveform: 'sawtooth',
     attack: 0.03, decay: 0.5, sustain: 0.2, release: 1,
@@ -189,6 +209,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'woodpecker-tap',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 500, resonatorFeedback: 0.80,
     frequency: 500,
     waveform: 'triangle',
     attack: 0.003, decay: 0.08, sustain: 0.0, release: 0.15,
@@ -196,9 +217,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 600, Q: 8 },
   },
 
-  // ── TREES & FOLIAGE ───────────────────────────────────────────────────────
+  // ── TREES & FOLIAGE (noise + resonator + subtractive) ────────────────────
   {
     name: 'leaf-rustle',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 1800,
     waveform: 'triangle',
     attack: 0.2, decay: 0.4, sustain: 0.5, release: 1.5,
@@ -207,6 +229,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'branch-creak',
+    engine: 'resonator', noiseColor: 'brown', resonatorHz: 140, resonatorFeedback: 0.78,
     frequency: 140,
     waveform: 'sawtooth',
     attack: 0.1, decay: 0.8, sustain: 0.2, release: 2,
@@ -223,6 +246,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'bamboo-knock',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 360, resonatorFeedback: 0.84,
     frequency: 360,
     waveform: 'triangle',
     attack: 0.004, decay: 0.6, sustain: 0.0, release: 1.0,
@@ -230,9 +254,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 380, Q: 9 },
   },
 
-  // ── EARTH & UNDERGROUND ───────────────────────────────────────────────────
+  // ── EARTH & UNDERGROUND (noise + resonator) ───────────────────────────────
   {
     name: 'earth-rumble',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 32,
     waveform: 'sine',
     attack: 6, decay: 3, sustain: 0.8, release: 8,
@@ -241,6 +266,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'cave-resonance',
+    engine: 'resonator', noiseColor: 'brown', resonatorHz: 75, resonatorFeedback: 0.90,
     frequency: 75,
     waveform: 'sine',
     attack: 5, decay: 2, sustain: 0.7, release: 8,
@@ -249,6 +275,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'rock-hum',
+    engine: 'resonator', noiseColor: 'brown', resonatorHz: 110, resonatorFeedback: 0.85,
     frequency: 110,
     waveform: 'triangle',
     attack: 4, decay: 2, sustain: 0.85, release: 7,
@@ -256,9 +283,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'lowpass', freq: 220, Q: 1 },
   },
 
-  // ── FIRE & HEAT ───────────────────────────────────────────────────────────
+  // ── FIRE & HEAT (noise + subtractive) ────────────────────────────────────
   {
     name: 'fire-crackle',
+    engine: 'noise', noiseColor: 'white',
     frequency: 320,
     waveform: 'sawtooth',
     attack: 0.05, decay: 0.12, sustain: 0.3, release: 0.3,
@@ -274,7 +302,7 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 200, Q: 2 },
   },
 
-  // ── NIGHT & ATMOSPHERE ────────────────────────────────────────────────────
+  // ── NIGHT & ATMOSPHERE (subtractive + fm) ─────────────────────────────────
   {
     name: 'night-hum',
     frequency: 48,
@@ -293,6 +321,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'dawn-shimmer',
+    engine: 'fm', fmHarmonicity: 3.2, fmModulationIndex: 4, fmModulationType: 'sine',
     frequency: 1100,
     waveform: 'sine',
     attack: 3, decay: 1.5, sustain: 0.4, release: 5,
@@ -300,9 +329,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 800, Q: 1 },
   },
 
-  // ── OCEAN & SHORE ─────────────────────────────────────────────────────────
+  // ── OCEAN & SHORE (noise) ─────────────────────────────────────────────────
   {
     name: 'wave-surge',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 90,
     waveform: 'sine',
     attack: 2.5, decay: 3, sustain: 0.5, release: 5,
@@ -311,6 +341,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'tide-wash',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 200,
     waveform: 'triangle',
     attack: 3, decay: 4, sustain: 0.4, release: 6,
@@ -319,6 +350,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'sea-wind',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 300,
     waveform: 'triangle',
     attack: 4, decay: 2, sustain: 0.7, release: 6,
@@ -326,7 +358,7 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 500, Q: 1.8 },
   },
 
-  // ── BIOME DRONES ──────────────────────────────────────────────────────────
+  // ── BIOME DRONES (subtractive) ────────────────────────────────────────────
   {
     name: 'forest-pulse',
     frequency: 55,
@@ -344,10 +376,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 440, Q: 2 },
   },
 
-  // ── RHYTHMIC WATER DROPS (6 VARIANTS) ────────────────────────────────────
+  // ── RHYTHMIC WATER DROPS (resonator) ─────────────────────────────────────
   {
     name: 'drop-rhythm-a',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 950, resonatorFeedback: 0.82,
     frequency: 1450,
     waveform: 'sine',
     attack: 0.004, decay: 0.12, sustain: 0.06, release: 0.22,
@@ -357,6 +390,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'drop-rhythm-b',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 740, resonatorFeedback: 0.80,
     frequency: 980,
     waveform: 'triangle',
     attack: 0.006, decay: 0.18, sustain: 0.08, release: 0.28,
@@ -366,6 +400,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'drop-rhythm-c',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 880, resonatorFeedback: 0.84,
     frequency: 1220,
     waveform: 'sine',
     attack: 0.003, decay: 0.08, sustain: 0.03, release: 0.16,
@@ -375,6 +410,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'drop-rhythm-d',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'pink', resonatorHz: 580, resonatorFeedback: 0.78,
     frequency: 760,
     waveform: 'triangle',
     attack: 0.008, decay: 0.24, sustain: 0.1, release: 0.32,
@@ -384,6 +420,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'drop-rhythm-e',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 950, resonatorFeedback: 0.86,
     frequency: 1680,
     waveform: 'sine',
     attack: 0.003, decay: 0.1, sustain: 0.02, release: 0.14,
@@ -393,6 +430,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'drop-rhythm-f',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'pink', resonatorHz: 420, resonatorFeedback: 0.76,
     frequency: 540,
     waveform: 'triangle',
     attack: 0.01, decay: 0.34, sustain: 0.14, release: 0.4,
@@ -400,10 +438,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 600, Q: 6 },
   },
 
-  // ── RHYTHMIC CICADAS (6 VARIANTS) ─────────────────────────────────────────
+  // ── RHYTHMIC CICADAS (fm) ─────────────────────────────────────────────────
   {
     name: 'cicada-rhythm-a',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.9, fmModulationIndex: 11, fmModulationType: 'square',
     frequency: 3400,
     waveform: 'square',
     attack: 0.014, decay: 0.12, sustain: 0.22, release: 0.22,
@@ -413,6 +452,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'cicada-rhythm-b',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.7, fmModulationIndex: 10, fmModulationType: 'square',
     frequency: 2900,
     waveform: 'square',
     attack: 0.02, decay: 0.2, sustain: 0.3, release: 0.35,
@@ -422,6 +462,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'cicada-rhythm-c',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.1, fmModulationIndex: 13, fmModulationType: 'sawtooth',
     frequency: 4100,
     waveform: 'sawtooth',
     attack: 0.012, decay: 0.09, sustain: 0.16, release: 0.18,
@@ -431,6 +472,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'cicada-rhythm-d',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.8, fmModulationIndex: 11, fmModulationType: 'square',
     frequency: 3200,
     waveform: 'square',
     attack: 0.018, decay: 0.18, sustain: 0.26, release: 0.3,
@@ -440,6 +482,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'cicada-rhythm-e',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.3, fmModulationIndex: 14, fmModulationType: 'sawtooth',
     frequency: 4300,
     waveform: 'sawtooth',
     attack: 0.01, decay: 0.08, sustain: 0.12, release: 0.16,
@@ -449,6 +492,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'cicada-rhythm-f',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.0, fmModulationIndex: 12, fmModulationType: 'square',
     frequency: 3600,
     waveform: 'square',
     attack: 0.016, decay: 0.14, sustain: 0.2, release: 0.24,
@@ -456,10 +500,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 3800, Q: 10 },
   },
 
-  // ── RHYTHMIC WOODPECKER KNOCKS (6 VARIANTS) ──────────────────────────────
+  // ── RHYTHMIC WOODPECKER KNOCKS (resonator) ────────────────────────────────
   {
     name: 'woodpecker-rhythm-a',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 420, resonatorFeedback: 0.80,
     frequency: 420,
     waveform: 'triangle',
     attack: 0.003, decay: 0.08, sustain: 0.02, release: 0.12,
@@ -469,6 +514,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'woodpecker-rhythm-b',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 520, resonatorFeedback: 0.82,
     frequency: 520,
     waveform: 'sawtooth',
     attack: 0.004, decay: 0.1, sustain: 0.04, release: 0.14,
@@ -478,6 +524,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'woodpecker-rhythm-c',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'brown', resonatorHz: 300, resonatorFeedback: 0.78,
     frequency: 300,
     waveform: 'triangle',
     attack: 0.006, decay: 0.14, sustain: 0.08, release: 0.2,
@@ -487,6 +534,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'woodpecker-rhythm-d',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 680, resonatorFeedback: 0.84,
     frequency: 680,
     waveform: 'sawtooth',
     attack: 0.003, decay: 0.06, sustain: 0.01, release: 0.1,
@@ -496,6 +544,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'woodpecker-rhythm-e',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'brown', resonatorHz: 260, resonatorFeedback: 0.76,
     frequency: 260,
     waveform: 'triangle',
     attack: 0.008, decay: 0.18, sustain: 0.12, release: 0.26,
@@ -505,6 +554,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'woodpecker-rhythm-f',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 590, resonatorFeedback: 0.81,
     frequency: 590,
     waveform: 'sawtooth',
     attack: 0.004, decay: 0.09, sustain: 0.03, release: 0.15,
@@ -512,10 +562,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 340, Q: 1.3 },
   },
 
-  // ── RHYTHMIC OCEAN SWELLS (6 VARIANTS) ────────────────────────────────────
+  // ── RHYTHMIC OCEAN SWELLS (noise) ─────────────────────────────────────────
   {
     name: 'ocean-rhythm-a',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 70,
     waveform: 'sine',
     attack: 0.9, decay: 1.6, sustain: 0.36, release: 2.4,
@@ -525,6 +576,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'ocean-rhythm-b',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 95,
     waveform: 'triangle',
     attack: 0.7, decay: 1.2, sustain: 0.28, release: 1.9,
@@ -534,6 +586,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'ocean-rhythm-c',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 130,
     waveform: 'triangle',
     attack: 0.5, decay: 1.1, sustain: 0.24, release: 1.6,
@@ -543,6 +596,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'ocean-rhythm-d',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 56,
     waveform: 'sine',
     attack: 1.2, decay: 2.0, sustain: 0.4, release: 3.1,
@@ -552,6 +606,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'ocean-rhythm-e',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 180,
     waveform: 'sawtooth',
     attack: 0.35, decay: 0.8, sustain: 0.2, release: 1.2,
@@ -561,6 +616,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'ocean-rhythm-f',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 220,
     waveform: 'triangle',
     attack: 0.28, decay: 0.7, sustain: 0.18, release: 1.0,
@@ -568,10 +624,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 420, Q: 1.4 },
   },
 
-  // ── RHYTHMIC BAMBOO CLICKS (6 VARIANTS) ──────────────────────────────────
+  // ── RHYTHMIC BAMBOO CLICKS (resonator) ───────────────────────────────────
   {
     name: 'bamboo-rhythm-a',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 360, resonatorFeedback: 0.84,
     frequency: 360,
     waveform: 'triangle',
     attack: 0.002, decay: 0.06, sustain: 0.02, release: 0.1,
@@ -581,6 +638,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'bamboo-rhythm-b',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 470, resonatorFeedback: 0.86,
     frequency: 470,
     waveform: 'triangle',
     attack: 0.003, decay: 0.08, sustain: 0.03, release: 0.11,
@@ -590,6 +648,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'bamboo-rhythm-c',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 620, resonatorFeedback: 0.88,
     frequency: 620,
     waveform: 'square',
     attack: 0.003, decay: 0.07, sustain: 0.02, release: 0.1,
@@ -599,6 +658,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'bamboo-rhythm-d',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 810, resonatorFeedback: 0.90,
     frequency: 810,
     waveform: 'square',
     attack: 0.002, decay: 0.05, sustain: 0.01, release: 0.08,
@@ -608,6 +668,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'bamboo-rhythm-e',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 930, resonatorFeedback: 0.88,
     frequency: 930,
     waveform: 'sawtooth',
     attack: 0.002, decay: 0.04, sustain: 0.0, release: 0.08,
@@ -617,6 +678,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'bamboo-rhythm-f',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 340, resonatorFeedback: 0.82,
     frequency: 340,
     waveform: 'triangle',
     attack: 0.004, decay: 0.1, sustain: 0.05, release: 0.14,
@@ -624,10 +686,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 390, Q: 9 },
   },
 
-  // ── RHYTHMIC FROG CHORUS (6 VARIANTS) ────────────────────────────────────
+  // ── RHYTHMIC FROG CHORUS (fm) ─────────────────────────────────────────────
   {
     name: 'frog-rhythm-a',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.6, fmModulationIndex: 5, fmModulationType: 'triangle',
     frequency: 110,
     waveform: 'sine',
     attack: 0.08, decay: 0.42, sustain: 0.26, release: 0.5,
@@ -637,6 +700,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'frog-rhythm-b',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.8, fmModulationIndex: 6, fmModulationType: 'triangle',
     frequency: 140,
     waveform: 'triangle',
     attack: 0.06, decay: 0.34, sustain: 0.22, release: 0.42,
@@ -646,6 +710,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'frog-rhythm-c',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.4, fmModulationIndex: 4, fmModulationType: 'sine',
     frequency: 95,
     waveform: 'sine',
     attack: 0.1, decay: 0.55, sustain: 0.3, release: 0.62,
@@ -655,6 +720,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'frog-rhythm-d',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.0, fmModulationIndex: 7, fmModulationType: 'triangle',
     frequency: 175,
     waveform: 'triangle',
     attack: 0.05, decay: 0.28, sustain: 0.2, release: 0.36,
@@ -664,6 +730,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'frog-rhythm-e',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.2, fmModulationIndex: 8, fmModulationType: 'triangle',
     frequency: 220,
     waveform: 'sawtooth',
     attack: 0.04, decay: 0.22, sustain: 0.14, release: 0.28,
@@ -673,6 +740,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'frog-rhythm-f',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.4, fmModulationIndex: 9, fmModulationType: 'triangle',
     frequency: 260,
     waveform: 'triangle',
     attack: 0.03, decay: 0.18, sustain: 0.12, release: 0.24,
@@ -680,9 +748,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 340, Q: 7 },
   },
 
-  // ── GLASS & CRYSTAL DRONES (4 VARIANTS) ──────────────────────────────────
+  // ── GLASS & CRYSTAL DRONES (fm) ───────────────────────────────────────────
   {
     name: 'glass-halo',
+    engine: 'fm', fmHarmonicity: 3.2, fmModulationIndex: 4, fmModulationType: 'sine',
     frequency: 730,
     waveform: 'sine',
     attack: 2.8, decay: 1.7, sustain: 0.62, release: 5.2,
@@ -691,6 +760,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'glass-chalice',
+    engine: 'fm', fmHarmonicity: 2.8, fmModulationIndex: 5, fmModulationType: 'sine',
     frequency: 960,
     waveform: 'triangle',
     attack: 3.1, decay: 1.4, sustain: 0.58, release: 5.8,
@@ -699,6 +769,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'glass-prism',
+    engine: 'fm', fmHarmonicity: 4.1, fmModulationIndex: 6, fmModulationType: 'triangle',
     frequency: 1260,
     waveform: 'sine',
     attack: 2.4, decay: 1.1, sustain: 0.54, release: 4.9,
@@ -707,6 +778,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'glass-bow',
+    engine: 'fm', fmHarmonicity: 3.5, fmModulationIndex: 7, fmModulationType: 'sine',
     frequency: 1680,
     waveform: 'triangle',
     attack: 1.9, decay: 0.9, sustain: 0.5, release: 4.2,
@@ -714,9 +786,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 2100, Q: 9.5 },
   },
 
-  // ── METALLIC DRONES (4 VARIANTS) ─────────────────────────────────────────
+  // ── METALLIC DRONES (fm) ──────────────────────────────────────────────────
   {
     name: 'alloy-drone',
+    engine: 'fm', fmHarmonicity: 2.3, fmModulationIndex: 5, fmModulationType: 'sawtooth',
     frequency: 98,
     waveform: 'sawtooth',
     attack: 4.2, decay: 1.8, sustain: 0.72, release: 6.4,
@@ -725,6 +798,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'bronze-resonator',
+    engine: 'fm', fmHarmonicity: 2.7, fmModulationIndex: 6, fmModulationType: 'triangle',
     frequency: 172,
     waveform: 'triangle',
     attack: 3.8, decay: 1.5, sustain: 0.68, release: 6.0,
@@ -733,6 +807,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'iron-plate',
+    engine: 'fm', fmHarmonicity: 3.4, fmModulationIndex: 8, fmModulationType: 'sawtooth',
     frequency: 268,
     waveform: 'sawtooth',
     attack: 2.6, decay: 1.2, sustain: 0.61, release: 5.1,
@@ -741,6 +816,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'steel-wire',
+    engine: 'fm', fmHarmonicity: 4.2, fmModulationIndex: 9, fmModulationType: 'triangle',
     frequency: 412,
     waveform: 'triangle',
     attack: 2.2, decay: 1.0, sustain: 0.57, release: 4.7,
@@ -748,9 +824,10 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 300, Q: 1.9 },
   },
 
-  // ── THUNDER ATMOS DRONES (4 VARIANTS) ────────────────────────────────────
+  // ── THUNDER ATMOS DRONES (noise) ──────────────────────────────────────────
   {
     name: 'thunder-roll',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 24,
     waveform: 'sine',
     attack: 7, decay: 3.2, sustain: 0.82, release: 9.2,
@@ -759,6 +836,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'storm-pressure',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 35,
     waveform: 'triangle',
     attack: 6.5, decay: 2.8, sustain: 0.8, release: 8.7,
@@ -767,6 +845,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'sub-boom',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 52,
     waveform: 'sine',
     attack: 5.4, decay: 2.4, sustain: 0.76, release: 7.5,
@@ -775,6 +854,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   },
   {
     name: 'cloud-rumble',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 71,
     waveform: 'triangle',
     attack: 4.8, decay: 2.1, sustain: 0.73, release: 6.9,
@@ -782,7 +862,7 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 140, Q: 1.2 },
   },
 
-  // ── REED & AEOLIAN DRONES (4 VARIANTS) ───────────────────────────────────
+  // ── REED & AEOLIAN DRONES (subtractive) ──────────────────────────────────
   {
     name: 'reed-choir',
     frequency: 214,
@@ -816,10 +896,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 420, Q: 1.6 },
   },
 
-  // ── RHYTHMIC GLASS TINKS (6 VARIANTS) ────────────────────────────────────
+  // ── RHYTHMIC GLASS TINKS (resonator) ─────────────────────────────────────
   {
     name: 'glass-rhythm-a',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 950, resonatorFeedback: 0.88,
     frequency: 1180,
     waveform: 'sine',
     attack: 0.003, decay: 0.11, sustain: 0.03, release: 0.16,
@@ -829,6 +910,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'glass-rhythm-b',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 950, resonatorFeedback: 0.90,
     frequency: 1460,
     waveform: 'triangle',
     attack: 0.002, decay: 0.08, sustain: 0.02, release: 0.12,
@@ -838,6 +920,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'glass-rhythm-c',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 950, resonatorFeedback: 0.92,
     frequency: 1720,
     waveform: 'sine',
     attack: 0.002, decay: 0.06, sustain: 0.01, release: 0.1,
@@ -847,6 +930,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'glass-rhythm-d',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 750, resonatorFeedback: 0.86,
     frequency: 940,
     waveform: 'triangle',
     attack: 0.004, decay: 0.14, sustain: 0.05, release: 0.2,
@@ -856,6 +940,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'glass-rhythm-e',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 610, resonatorFeedback: 0.84,
     frequency: 760,
     waveform: 'triangle',
     attack: 0.005, decay: 0.18, sustain: 0.08, release: 0.24,
@@ -865,6 +950,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'glass-rhythm-f',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 950, resonatorFeedback: 0.92,
     frequency: 2080,
     waveform: 'sawtooth',
     attack: 0.002, decay: 0.05, sustain: 0.01, release: 0.08,
@@ -872,10 +958,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 1400, Q: 2.4 },
   },
 
-  // ── RHYTHMIC METAL CLACKS (6 VARIANTS) ───────────────────────────────────
+  // ── RHYTHMIC METAL CLACKS (resonator) ────────────────────────────────────
   {
     name: 'metal-rhythm-a',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'brown', resonatorHz: 260, resonatorFeedback: 0.82,
     frequency: 260,
     waveform: 'sawtooth',
     attack: 0.003, decay: 0.09, sustain: 0.03, release: 0.13,
@@ -885,6 +972,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'metal-rhythm-b',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 380, resonatorFeedback: 0.84,
     frequency: 380,
     waveform: 'square',
     attack: 0.003, decay: 0.08, sustain: 0.02, release: 0.12,
@@ -894,6 +982,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'metal-rhythm-c',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 520, resonatorFeedback: 0.86,
     frequency: 520,
     waveform: 'sawtooth',
     attack: 0.002, decay: 0.06, sustain: 0.01, release: 0.1,
@@ -903,6 +992,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'metal-rhythm-d',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 690, resonatorFeedback: 0.88,
     frequency: 690,
     waveform: 'square',
     attack: 0.003, decay: 0.07, sustain: 0.02, release: 0.11,
@@ -912,6 +1002,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'metal-rhythm-e',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 860, resonatorFeedback: 0.86,
     frequency: 860,
     waveform: 'sawtooth',
     attack: 0.002, decay: 0.05, sustain: 0.01, release: 0.09,
@@ -921,6 +1012,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'metal-rhythm-f',
     mode: 'rhythmic',
+    engine: 'resonator', noiseColor: 'white', resonatorHz: 950, resonatorFeedback: 0.84,
     frequency: 1120,
     waveform: 'square',
     attack: 0.002, decay: 0.045, sustain: 0.0, release: 0.08,
@@ -928,10 +1020,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 700, Q: 2.6 },
   },
 
-  // ── RHYTHMIC GEOTHERMAL POPS (6 VARIANTS) ────────────────────────────────
+  // ── RHYTHMIC GEOTHERMAL POPS (noise) ─────────────────────────────────────
   {
     name: 'geothermal-rhythm-a',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 84,
     waveform: 'sine',
     attack: 0.04, decay: 0.36, sustain: 0.18, release: 0.46,
@@ -941,6 +1034,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'geothermal-rhythm-b',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 116,
     waveform: 'triangle',
     attack: 0.03, decay: 0.28, sustain: 0.15, release: 0.38,
@@ -950,6 +1044,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'geothermal-rhythm-c',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'brown',
     frequency: 168,
     waveform: 'triangle',
     attack: 0.025, decay: 0.22, sustain: 0.13, release: 0.32,
@@ -959,6 +1054,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'geothermal-rhythm-d',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 236,
     waveform: 'sawtooth',
     attack: 0.018, decay: 0.16, sustain: 0.1, release: 0.26,
@@ -968,6 +1064,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'geothermal-rhythm-e',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 312,
     waveform: 'triangle',
     attack: 0.015, decay: 0.12, sustain: 0.08, release: 0.2,
@@ -977,6 +1074,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'geothermal-rhythm-f',
     mode: 'rhythmic',
+    engine: 'noise', noiseColor: 'pink',
     frequency: 422,
     waveform: 'sawtooth',
     attack: 0.01, decay: 0.1, sustain: 0.06, release: 0.16,
@@ -984,10 +1082,11 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 280, Q: 1.5 },
   },
 
-  // ── RHYTHMIC ELECTRO PULSES (6 VARIANTS) ─────────────────────────────────
+  // ── RHYTHMIC ELECTRO PULSES (fm) ──────────────────────────────────────────
   {
     name: 'electro-rhythm-a',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.0, fmModulationIndex: 6, fmModulationType: 'square',
     frequency: 210,
     waveform: 'square',
     attack: 0.01, decay: 0.15, sustain: 0.12, release: 0.22,
@@ -997,6 +1096,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'electro-rhythm-b',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.0, fmModulationIndex: 8, fmModulationType: 'square',
     frequency: 320,
     waveform: 'square',
     attack: 0.008, decay: 0.12, sustain: 0.1, release: 0.18,
@@ -1006,6 +1106,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'electro-rhythm-c',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 1.5, fmModulationIndex: 10, fmModulationType: 'sawtooth',
     frequency: 460,
     waveform: 'sawtooth',
     attack: 0.006, decay: 0.1, sustain: 0.08, release: 0.15,
@@ -1015,6 +1116,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'electro-rhythm-d',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.0, fmModulationIndex: 12, fmModulationType: 'square',
     frequency: 620,
     waveform: 'square',
     attack: 0.005, decay: 0.09, sustain: 0.06, release: 0.13,
@@ -1024,6 +1126,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'electro-rhythm-e',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 2.5, fmModulationIndex: 14, fmModulationType: 'sawtooth',
     frequency: 780,
     waveform: 'sawtooth',
     attack: 0.004, decay: 0.07, sustain: 0.04, release: 0.11,
@@ -1033,6 +1136,7 @@ export const ARCHETYPES: SoundArchetype[] = [
   {
     name: 'electro-rhythm-f',
     mode: 'rhythmic',
+    engine: 'fm', fmHarmonicity: 3.0, fmModulationIndex: 16, fmModulationType: 'square',
     frequency: 980,
     waveform: 'square',
     attack: 0.003, decay: 0.06, sustain: 0.02, release: 0.1,
@@ -1040,7 +1144,7 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 520, Q: 2.8 },
   },
 
-  // ── NOISE-TEXTURE DRONES (4 VARIANTS) ────────────────────────────────────
+  // ── NOISE-TEXTURE DRONES (noise) ──────────────────────────────────────────
   {
     name: 'dust-noise-bed',
     engine: 'noise',
@@ -1082,7 +1186,7 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'highpass', freq: 960, Q: 1.5 },
   },
 
-  // ── RHYTHMIC NOISE BURSTS (4 VARIANTS) ───────────────────────────────────
+  // ── RHYTHMIC NOISE BURSTS (noise) ─────────────────────────────────────────
   {
     name: 'noise-rhythm-a',
     mode: 'rhythmic',
@@ -1128,7 +1232,7 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 1440, Q: 5.8 },
   },
 
-  // ── FM INHARMONIC TONES (4 VARIANTS) ─────────────────────────────────────
+  // ── FM INHARMONIC TONES (fm) ──────────────────────────────────────────────
   {
     name: 'bronze-bell-orbit',
     engine: 'fm',
@@ -1179,7 +1283,7 @@ export const ARCHETYPES: SoundArchetype[] = [
     filter: { type: 'bandpass', freq: 1580, Q: 9.4 },
   },
 
-  // ── MODAL RESONATORS (4 VARIANTS) ────────────────────────────────────────
+  // ── MODAL RESONATORS (resonator) ──────────────────────────────────────────
   {
     name: 'ceramic-bowl-tone',
     engine: 'resonator',
@@ -1228,5 +1332,626 @@ export const ARCHETYPES: SoundArchetype[] = [
     attack: 0.004, decay: 0.14, sustain: 0.05, release: 0.22,
     lfoRate: 8.4, lfoDepth: 126, lfoTarget: 'amplitude',
     filter: { type: 'bandpass', freq: 780, Q: 10.4 },
+  },
+
+  // ── SUBTRACTIVE: DESERT / ARID (6) ───────────────────────────────────────
+  {
+    name: 'hot-sand-tone',
+    frequency: 42, waveform: 'sine',
+    attack: 8, decay: 3, sustain: 0.88, release: 10,
+    lfoRate: 0.02, lfoDepth: 3, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 120, Q: 0.6 },
+  },
+  {
+    name: 'mesa-hum',
+    frequency: 95, waveform: 'triangle',
+    attack: 5, decay: 2, sustain: 0.82, release: 8,
+    lfoRate: 0.06, lfoDepth: 8, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 180, Q: 1.4 },
+  },
+  {
+    name: 'desert-mirage',
+    frequency: 248, waveform: 'sine',
+    attack: 4, decay: 1.5, sustain: 0.72, release: 7,
+    lfoRate: 0.11, lfoDepth: 22, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 380, Q: 2.8 },
+  },
+  {
+    name: 'canyon-breath',
+    frequency: 145, waveform: 'triangle',
+    attack: 3, decay: 1.2, sustain: 0.65, release: 6,
+    lfoRate: 0.09, lfoDepth: 14, lfoTarget: 'frequency',
+    filter: { type: 'highpass', freq: 280, Q: 1.0 },
+  },
+  {
+    name: 'arid-pulse',
+    frequency: 66, waveform: 'sine',
+    attack: 6, decay: 2, sustain: 0.80, release: 9,
+    lfoRate: 0.04, lfoDepth: 6, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 220, Q: 0.8 },
+  },
+  {
+    name: 'sun-shimmer',
+    frequency: 640, waveform: 'triangle',
+    attack: 2.5, decay: 1, sustain: 0.55, release: 5,
+    lfoRate: 0.28, lfoDepth: 38, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1100, Q: 3.5 },
+  },
+
+  // ── SUBTRACTIVE: ARCTIC / COLD (6) ───────────────────────────────────────
+  {
+    name: 'tundra-pulse',
+    frequency: 38, waveform: 'sine',
+    attack: 9, decay: 3, sustain: 0.90, release: 11,
+    lfoRate: 0.015, lfoDepth: 2, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 90, Q: 0.5 },
+  },
+  {
+    name: 'ice-sheet',
+    frequency: 74, waveform: 'sine',
+    attack: 7, decay: 2.5, sustain: 0.86, release: 10,
+    lfoRate: 0.03, lfoDepth: 4, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 160, Q: 0.5 },
+  },
+  {
+    name: 'polar-breath',
+    frequency: 190, waveform: 'triangle',
+    attack: 5, decay: 1.8, sustain: 0.70, release: 7,
+    lfoRate: 0.07, lfoDepth: 16, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 320, Q: 1.6 },
+  },
+  {
+    name: 'frost-tone',
+    frequency: 460, waveform: 'sine',
+    attack: 3, decay: 1.2, sustain: 0.58, release: 5.5,
+    lfoRate: 0.18, lfoDepth: 28, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 380, Q: 1.2 },
+  },
+  {
+    name: 'arctic-overtone',
+    frequency: 820, waveform: 'sine',
+    attack: 2, decay: 0.8, sustain: 0.48, release: 4.5,
+    lfoRate: 0.22, lfoDepth: 35, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1400, Q: 4.0 },
+  },
+  {
+    name: 'permafrost',
+    frequency: 28, waveform: 'sine',
+    attack: 10, decay: 4, sustain: 0.92, release: 13,
+    lfoRate: 0.01, lfoDepth: 1.5, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 80, Q: 0.4 },
+  },
+
+  // ── SUBTRACTIVE: UNDERWATER / DEEP SEA (6) ────────────────────────────────
+  {
+    name: 'submarine-hum',
+    frequency: 62, waveform: 'sine',
+    attack: 6, decay: 2, sustain: 0.84, release: 9,
+    lfoRate: 0.05, lfoDepth: 7, lfoTarget: 'frequency',
+    filter: { type: 'lowpass', freq: 140, Q: 0.7 },
+  },
+  {
+    name: 'benthic-drone',
+    frequency: 44, waveform: 'triangle',
+    attack: 8, decay: 3, sustain: 0.88, release: 11,
+    lfoRate: 0.03, lfoDepth: 5, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 100, Q: 0.5 },
+  },
+  {
+    name: 'coral-tone',
+    frequency: 310, waveform: 'sine',
+    attack: 3.5, decay: 1.4, sustain: 0.66, release: 6,
+    lfoRate: 0.14, lfoDepth: 24, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 520, Q: 3.0 },
+  },
+  {
+    name: 'thermal-vent',
+    frequency: 130, waveform: 'sawtooth',
+    attack: 4, decay: 1.5, sustain: 0.74, release: 7,
+    lfoRate: 0.08, lfoDepth: 18, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 250, Q: 0.9 },
+  },
+  {
+    name: 'bioluminescence',
+    frequency: 1200, waveform: 'sine',
+    attack: 2, decay: 0.8, sustain: 0.44, release: 4,
+    lfoRate: 0.42, lfoDepth: 52, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2000, Q: 5.0 },
+  },
+  {
+    name: 'deep-sea-hum',
+    frequency: 22, waveform: 'sine',
+    attack: 12, decay: 5, sustain: 0.94, release: 15,
+    lfoRate: 0.008, lfoDepth: 1, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 60, Q: 0.4 },
+  },
+
+  // ── SUBTRACTIVE: STRATOSPHERE / SKY (6) ──────────────────────────────────
+  {
+    name: 'jet-stream-hum',
+    frequency: 290, waveform: 'triangle',
+    attack: 4, decay: 1.5, sustain: 0.68, release: 6.5,
+    lfoRate: 0.12, lfoDepth: 20, lfoTarget: 'frequency',
+    filter: { type: 'highpass', freq: 500, Q: 1.3 },
+  },
+  {
+    name: 'cirrus-tone',
+    frequency: 720, waveform: 'sine',
+    attack: 3, decay: 1, sustain: 0.52, release: 5,
+    lfoRate: 0.19, lfoDepth: 30, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 600, Q: 1.0 },
+  },
+  {
+    name: 'altitude-pulse',
+    frequency: 170, waveform: 'sine',
+    attack: 5, decay: 2, sustain: 0.72, release: 7,
+    lfoRate: 0.17, lfoDepth: 32, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 300, Q: 2.0 },
+  },
+  {
+    name: 'cloud-mass',
+    frequency: 85, waveform: 'triangle',
+    attack: 6, decay: 2.5, sustain: 0.78, release: 9,
+    lfoRate: 0.06, lfoDepth: 10, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 200, Q: 0.7 },
+  },
+  {
+    name: 'aurora-wave',
+    frequency: 2400, waveform: 'sine',
+    attack: 2, decay: 0.8, sustain: 0.40, release: 4,
+    lfoRate: 0.35, lfoDepth: 60, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 3200, Q: 4.0 },
+  },
+  {
+    name: 'stratosphere',
+    frequency: 1800, waveform: 'triangle',
+    attack: 2.5, decay: 1, sustain: 0.46, release: 4.5,
+    lfoRate: 0.26, lfoDepth: 44, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 1400, Q: 1.5 },
+  },
+
+  // ── SUBTRACTIVE: URBAN / INDUSTRIAL (4) ──────────────────────────────────
+  {
+    name: 'power-line',
+    frequency: 100, waveform: 'square',
+    attack: 2, decay: 0.8, sustain: 0.88, release: 4,
+    lfoRate: 0.04, lfoDepth: 5, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 200, Q: 6.0 },
+  },
+  {
+    name: 'transformer-hum',
+    frequency: 50, waveform: 'square',
+    attack: 3, decay: 1, sustain: 0.92, release: 5,
+    lfoRate: 0.02, lfoDepth: 3, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 100, Q: 8.0 },
+  },
+  {
+    name: 'ventilation-drone',
+    frequency: 240, waveform: 'sawtooth',
+    attack: 3, decay: 1.2, sustain: 0.76, release: 5.5,
+    lfoRate: 0.10, lfoDepth: 15, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 400, Q: 0.6 },
+  },
+  {
+    name: 'infrastructure',
+    frequency: 155, waveform: 'triangle',
+    attack: 4, decay: 1.5, sustain: 0.80, release: 6,
+    lfoRate: 0.07, lfoDepth: 11, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 310, Q: 2.0 },
+  },
+
+  // ── SUBTRACTIVE: MUSICAL / HARMONIC (4) ──────────────────────────────────
+  {
+    name: 'fifth-layer',
+    frequency: 82.5, waveform: 'sine',
+    attack: 5, decay: 2, sustain: 0.82, release: 8,
+    lfoRate: 0.05, lfoDepth: 8, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 165, Q: 1.5 },
+  },
+  {
+    name: 'octave-bed',
+    frequency: 110, waveform: 'sine',
+    attack: 4, decay: 1.5, sustain: 0.86, release: 7,
+    lfoRate: 0.04, lfoDepth: 6, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 300, Q: 0.7 },
+  },
+  {
+    name: 'third-shimmer',
+    frequency: 528, waveform: 'triangle',
+    attack: 3, decay: 1.2, sustain: 0.62, release: 5.5,
+    lfoRate: 0.16, lfoDepth: 28, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 880, Q: 2.0 },
+  },
+  {
+    name: 'seventh-drone',
+    frequency: 396, waveform: 'sine',
+    attack: 4, decay: 1.5, sustain: 0.70, release: 6.5,
+    lfoRate: 0.10, lfoDepth: 18, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 660, Q: 1.8 },
+  },
+
+  // ── SUBTRACTIVE: BODY / ORGANIC RESONANCE (4) ────────────────────────────
+  {
+    name: 'skull-resonance',
+    frequency: 43, waveform: 'sine',
+    attack: 6, decay: 2, sustain: 0.84, release: 9,
+    lfoRate: 0.03, lfoDepth: 4, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 86, Q: 3.0 },
+  },
+  {
+    name: 'chest-drone',
+    frequency: 72, waveform: 'triangle',
+    attack: 5, decay: 1.8, sustain: 0.80, release: 8,
+    lfoRate: 0.05, lfoDepth: 7, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 180, Q: 0.8 },
+  },
+  {
+    name: 'vocal-formant',
+    frequency: 270, waveform: 'sine',
+    attack: 3, decay: 1, sustain: 0.66, release: 5,
+    lfoRate: 0.13, lfoDepth: 20, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 540, Q: 5.0 },
+  },
+  {
+    name: 'gut-tone',
+    frequency: 196, waveform: 'sawtooth',
+    attack: 4, decay: 1.5, sustain: 0.72, release: 6.5,
+    lfoRate: 0.09, lfoDepth: 14, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 350, Q: 0.7 },
+  },
+
+  // ── SUBTRACTIVE: COSMIC / ABSTRACT (4) ───────────────────────────────────
+  {
+    name: 'void-pulse',
+    frequency: 30, waveform: 'sine',
+    attack: 10, decay: 4, sustain: 0.92, release: 12,
+    lfoRate: 0.012, lfoDepth: 2, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 70, Q: 0.4 },
+  },
+  {
+    name: 'stellar-hum',
+    frequency: 185, waveform: 'sine',
+    attack: 5, decay: 2, sustain: 0.74, release: 8,
+    lfoRate: 0.08, lfoDepth: 12, lfoTarget: 'frequency',
+    filter: { type: 'bandpass', freq: 370, Q: 2.0 },
+  },
+  {
+    name: 'pulsar-tone',
+    frequency: 440, waveform: 'triangle',
+    attack: 3, decay: 1.2, sustain: 0.60, release: 5.5,
+    lfoRate: 0.15, lfoDepth: 26, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 360, Q: 1.1 },
+  },
+  {
+    name: 'quantum-bed',
+    frequency: 1320, waveform: 'sine',
+    attack: 2, decay: 0.8, sustain: 0.44, release: 4,
+    lfoRate: 0.30, lfoDepth: 50, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2200, Q: 3.0 },
+  },
+
+  // ── NOISE: RHYTHMIC RAIN (6) ──────────────────────────────────────────────
+  {
+    name: 'rain-rhythm-a',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'white',
+    frequency: 1600, waveform: 'sine',
+    attack: 0.005, decay: 0.14, sustain: 0.10, release: 0.20,
+    lfoRate: 7.2, lfoDepth: 118, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1600, Q: 5.0 },
+  },
+  {
+    name: 'rain-rhythm-b',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'pink',
+    frequency: 1000, waveform: 'sine',
+    attack: 0.008, decay: 0.18, sustain: 0.12, release: 0.26,
+    lfoRate: 5.4, lfoDepth: 110, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1000, Q: 4.0 },
+  },
+  {
+    name: 'rain-rhythm-c',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'white',
+    frequency: 2200, waveform: 'triangle',
+    attack: 0.004, decay: 0.10, sustain: 0.07, release: 0.16,
+    lfoRate: 9.8, lfoDepth: 126, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2200, Q: 6.0 },
+  },
+  {
+    name: 'rain-rhythm-d',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'pink',
+    frequency: 700, waveform: 'sine',
+    attack: 0.01, decay: 0.22, sustain: 0.14, release: 0.30,
+    lfoRate: 3.6, lfoDepth: 104, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 700, Q: 3.0 },
+  },
+  {
+    name: 'rain-rhythm-e',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'white',
+    frequency: 800, waveform: 'triangle',
+    attack: 0.003, decay: 0.09, sustain: 0.06, release: 0.14,
+    lfoRate: 11.4, lfoDepth: 132, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 800, Q: 1.5 },
+  },
+  {
+    name: 'rain-rhythm-f',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'brown',
+    frequency: 400, waveform: 'sine',
+    attack: 0.015, decay: 0.30, sustain: 0.18, release: 0.40,
+    lfoRate: 2.1, lfoDepth: 96, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 400, Q: 0.8 },
+  },
+
+  // ── NOISE: RHYTHMIC WIND GUSTS (6) ───────────────────────────────────────
+  {
+    name: 'wind-rhythm-a',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'pink',
+    frequency: 500, waveform: 'sine',
+    attack: 0.12, decay: 0.48, sustain: 0.24, release: 0.60,
+    lfoRate: 1.8, lfoDepth: 108, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 500, Q: 2.0 },
+  },
+  {
+    name: 'wind-rhythm-b',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'white',
+    frequency: 300, waveform: 'triangle',
+    attack: 0.08, decay: 0.36, sustain: 0.20, release: 0.50,
+    lfoRate: 2.4, lfoDepth: 112, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 300, Q: 1.0 },
+  },
+  {
+    name: 'wind-rhythm-c',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'pink',
+    frequency: 800, waveform: 'sine',
+    attack: 0.06, decay: 0.28, sustain: 0.16, release: 0.40,
+    lfoRate: 3.2, lfoDepth: 116, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 800, Q: 2.5 },
+  },
+  {
+    name: 'wind-rhythm-d',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'brown',
+    frequency: 250, waveform: 'sine',
+    attack: 0.18, decay: 0.64, sustain: 0.30, release: 0.80,
+    lfoRate: 1.2, lfoDepth: 100, lfoTarget: 'amplitude',
+    filter: { type: 'lowpass', freq: 250, Q: 0.7 },
+  },
+  {
+    name: 'wind-rhythm-e',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'pink',
+    frequency: 1200, waveform: 'triangle',
+    attack: 0.04, decay: 0.20, sustain: 0.12, release: 0.30,
+    lfoRate: 4.6, lfoDepth: 120, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1200, Q: 3.0 },
+  },
+  {
+    name: 'wind-rhythm-f',
+    mode: 'rhythmic', engine: 'noise', noiseColor: 'white',
+    frequency: 600, waveform: 'sine',
+    attack: 0.09, decay: 0.38, sustain: 0.20, release: 0.52,
+    lfoRate: 2.8, lfoDepth: 114, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 600, Q: 1.8 },
+  },
+
+  // ── NOISE: BLIZZARD DRONE (1) ─────────────────────────────────────────────
+  {
+    name: 'blizzard-veil',
+    engine: 'noise', noiseColor: 'white',
+    frequency: 600, waveform: 'triangle',
+    attack: 4, decay: 1.8, sustain: 0.74, release: 6.5,
+    lfoRate: 0.38, lfoDepth: 56, lfoTarget: 'amplitude',
+    filter: { type: 'highpass', freq: 600, Q: 0.6 },
+  },
+
+  // ── FM: RHYTHMIC BIRD CALLS (6) ───────────────────────────────────────────
+  {
+    name: 'bird-rhythm-a',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 2.4, fmModulationIndex: 5, fmModulationType: 'sine',
+    frequency: 1800, waveform: 'sine',
+    attack: 0.02, decay: 0.22, sustain: 0.18, release: 0.32,
+    lfoRate: 4.8, lfoDepth: 106, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2200, Q: 6 },
+  },
+  {
+    name: 'bird-rhythm-b',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 3.1, fmModulationIndex: 4, fmModulationType: 'sine',
+    frequency: 2400, waveform: 'sine',
+    attack: 0.015, decay: 0.16, sustain: 0.12, release: 0.24,
+    lfoRate: 7.2, lfoDepth: 114, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2900, Q: 7 },
+  },
+  {
+    name: 'bird-rhythm-c',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 1.8, fmModulationIndex: 6, fmModulationType: 'triangle',
+    frequency: 1200, waveform: 'triangle',
+    attack: 0.025, decay: 0.28, sustain: 0.20, release: 0.38,
+    lfoRate: 3.6, lfoDepth: 102, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1500, Q: 5 },
+  },
+  {
+    name: 'bird-rhythm-d',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 3.8, fmModulationIndex: 3, fmModulationType: 'sine',
+    frequency: 3000, waveform: 'sine',
+    attack: 0.012, decay: 0.12, sustain: 0.08, release: 0.18,
+    lfoRate: 9.4, lfoDepth: 120, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 3400, Q: 8 },
+  },
+  {
+    name: 'bird-rhythm-e',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 2.8, fmModulationIndex: 7, fmModulationType: 'sine',
+    frequency: 2800, waveform: 'sine',
+    attack: 0.018, decay: 0.20, sustain: 0.16, release: 0.28,
+    lfoRate: 6.6, lfoDepth: 118, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 3200, Q: 7 },
+  },
+  {
+    name: 'bird-rhythm-f',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 2.0, fmModulationIndex: 8, fmModulationType: 'triangle',
+    frequency: 1600, waveform: 'triangle',
+    attack: 0.022, decay: 0.24, sustain: 0.18, release: 0.34,
+    lfoRate: 5.4, lfoDepth: 110, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2000, Q: 6 },
+  },
+
+  // ── FM: RHYTHMIC BELLS (6) ────────────────────────────────────────────────
+  {
+    name: 'bell-rhythm-a',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 4.2, fmModulationIndex: 12, fmModulationType: 'sine',
+    frequency: 880, waveform: 'sine',
+    attack: 0.003, decay: 0.60, sustain: 0.04, release: 1.20,
+    lfoRate: 3.2, lfoDepth: 88, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1100, Q: 8 },
+  },
+  {
+    name: 'bell-rhythm-b',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 5.1, fmModulationIndex: 10, fmModulationType: 'sine',
+    frequency: 1760, waveform: 'sine',
+    attack: 0.002, decay: 0.48, sustain: 0.03, release: 0.96,
+    lfoRate: 4.8, lfoDepth: 92, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2200, Q: 9 },
+  },
+  {
+    name: 'bell-rhythm-c',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 3.7, fmModulationIndex: 14, fmModulationType: 'triangle',
+    frequency: 660, waveform: 'triangle',
+    attack: 0.004, decay: 0.72, sustain: 0.05, release: 1.40,
+    lfoRate: 2.4, lfoDepth: 82, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 820, Q: 7 },
+  },
+  {
+    name: 'bell-rhythm-d',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 6.0, fmModulationIndex: 8, fmModulationType: 'sine',
+    frequency: 1320, waveform: 'sine',
+    attack: 0.003, decay: 0.55, sustain: 0.03, release: 1.10,
+    lfoRate: 3.8, lfoDepth: 90, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 1600, Q: 10 },
+  },
+  {
+    name: 'bell-rhythm-e',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 4.8, fmModulationIndex: 16, fmModulationType: 'sine',
+    frequency: 440, waveform: 'sine',
+    attack: 0.004, decay: 0.80, sustain: 0.04, release: 1.60,
+    lfoRate: 1.8, lfoDepth: 78, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 550, Q: 7 },
+  },
+  {
+    name: 'bell-rhythm-f',
+    mode: 'rhythmic', engine: 'fm',
+    fmHarmonicity: 5.5, fmModulationIndex: 11, fmModulationType: 'triangle',
+    frequency: 2200, waveform: 'triangle',
+    attack: 0.002, decay: 0.40, sustain: 0.02, release: 0.80,
+    lfoRate: 5.6, lfoDepth: 96, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 2600, Q: 9 },
+  },
+
+  // ── RESONATOR: RHYTHMIC SPRING / WATER ON STONE (6) ──────────────────────
+  {
+    name: 'spring-rhythm-a',
+    mode: 'rhythmic', engine: 'resonator', noiseColor: 'pink',
+    resonatorHz: 180, resonatorFeedback: 0.72,
+    frequency: 180, waveform: 'sine',
+    attack: 0.06, decay: 0.38, sustain: 0.20, release: 0.52,
+    lfoRate: 1.6, lfoDepth: 94, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 240, Q: 3.5 },
+  },
+  {
+    name: 'spring-rhythm-b',
+    mode: 'rhythmic', engine: 'resonator', noiseColor: 'brown',
+    resonatorHz: 120, resonatorFeedback: 0.68,
+    frequency: 120, waveform: 'triangle',
+    attack: 0.08, decay: 0.48, sustain: 0.24, release: 0.64,
+    lfoRate: 1.2, lfoDepth: 88, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 160, Q: 3.0 },
+  },
+  {
+    name: 'spring-rhythm-c',
+    mode: 'rhythmic', engine: 'resonator', noiseColor: 'pink',
+    resonatorHz: 240, resonatorFeedback: 0.75,
+    frequency: 240, waveform: 'sine',
+    attack: 0.04, decay: 0.30, sustain: 0.16, release: 0.42,
+    lfoRate: 2.2, lfoDepth: 100, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 320, Q: 4.0 },
+  },
+  {
+    name: 'spring-rhythm-d',
+    mode: 'rhythmic', engine: 'resonator', noiseColor: 'pink',
+    resonatorHz: 320, resonatorFeedback: 0.70,
+    frequency: 320, waveform: 'triangle',
+    attack: 0.03, decay: 0.24, sustain: 0.14, release: 0.34,
+    lfoRate: 2.8, lfoDepth: 104, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 420, Q: 4.5 },
+  },
+  {
+    name: 'spring-rhythm-e',
+    mode: 'rhythmic', engine: 'resonator', noiseColor: 'brown',
+    resonatorHz: 90, resonatorFeedback: 0.65,
+    frequency: 90, waveform: 'sine',
+    attack: 0.10, decay: 0.58, sustain: 0.28, release: 0.76,
+    lfoRate: 0.9, lfoDepth: 84, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 120, Q: 2.8 },
+  },
+  {
+    name: 'spring-rhythm-f',
+    mode: 'rhythmic', engine: 'resonator', noiseColor: 'pink',
+    resonatorHz: 440, resonatorFeedback: 0.77,
+    frequency: 440, waveform: 'sine',
+    attack: 0.025, decay: 0.20, sustain: 0.12, release: 0.28,
+    lfoRate: 3.6, lfoDepth: 108, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 580, Q: 5.0 },
+  },
+
+  // ── RESONATOR: STATIC DRONES (5) ─────────────────────────────────────────
+  {
+    name: 'singing-bowl-bass',
+    engine: 'resonator', noiseColor: 'pink',
+    resonatorHz: 110, resonatorFeedback: 0.92,
+    frequency: 110, waveform: 'triangle',
+    attack: 2.5, decay: 1.5, sustain: 0.62, release: 6.0,
+    lfoRate: 0.08, lfoDepth: 18, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 140, Q: 5.5 },
+  },
+  {
+    name: 'crystal-goblet',
+    engine: 'resonator', noiseColor: 'white',
+    resonatorHz: 560, resonatorFeedback: 0.88,
+    frequency: 560, waveform: 'sine',
+    attack: 2.0, decay: 1.1, sustain: 0.56, release: 5.2,
+    lfoRate: 0.22, lfoDepth: 36, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 700, Q: 8.0 },
+  },
+  {
+    name: 'wood-block-drone',
+    engine: 'resonator', noiseColor: 'brown',
+    resonatorHz: 340, resonatorFeedback: 0.80,
+    frequency: 340, waveform: 'triangle',
+    attack: 1.8, decay: 1.0, sustain: 0.50, release: 4.5,
+    lfoRate: 0.14, lfoDepth: 24, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 420, Q: 6.2 },
+  },
+  {
+    name: 'brass-tube',
+    engine: 'resonator', noiseColor: 'pink',
+    resonatorHz: 220, resonatorFeedback: 0.86,
+    frequency: 220, waveform: 'sine',
+    attack: 2.2, decay: 1.3, sustain: 0.58, release: 5.4,
+    lfoRate: 0.12, lfoDepth: 22, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 280, Q: 5.0 },
+  },
+  {
+    name: 'iron-bell-static',
+    engine: 'resonator', noiseColor: 'white',
+    resonatorHz: 780, resonatorFeedback: 0.84,
+    frequency: 780, waveform: 'triangle',
+    attack: 1.6, decay: 0.9, sustain: 0.48, release: 4.0,
+    lfoRate: 0.26, lfoDepth: 40, lfoTarget: 'amplitude',
+    filter: { type: 'bandpass', freq: 960, Q: 9.0 },
   },
 ];

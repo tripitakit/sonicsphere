@@ -28,13 +28,17 @@ const ENGINE_TABS: { engine: SoundEngineType; label: string; color: string; bord
   { engine: 'resonator',   label: 'Resonator', color: '#7fb8a4', border: '#33aa88', bg: 'rgba(20,60,45,0.5)' },
 ];
 
-/** Pre-computed archetype names per engine, sorted alphabetically. */
-const ARCHETYPES_BY_ENGINE: Record<SoundEngineType, string[]> = {
-  subtractive: ARCHETYPES.filter(a => (a.engine ?? 'subtractive') === 'subtractive').map(a => a.name).sort(),
-  noise: ARCHETYPES.filter(a => a.engine === 'noise').map(a => a.name).sort(),
-  fm: ARCHETYPES.filter(a => a.engine === 'fm').map(a => a.name).sort(),
-  resonator: ARCHETYPES.filter(a => a.engine === 'resonator').map(a => a.name).sort(),
-};
+/** Pre-computed archetype names per engine, split by mode and sorted alphabetically. */
+const ARCHETYPES_BY_ENGINE: Record<SoundEngineType, { drones: string[]; rhythmic: string[] }> = (() => {
+  const engines: SoundEngineType[] = ['subtractive', 'noise', 'fm', 'resonator'];
+  return Object.fromEntries(engines.map(eng => {
+    const pool = ARCHETYPES.filter(a => (a.engine ?? 'subtractive') === eng);
+    return [eng, {
+      drones:   pool.filter(a => a.mode !== 'rhythmic').map(a => a.name).sort(),
+      rhythmic: pool.filter(a => a.mode === 'rhythmic').map(a => a.name).sort(),
+    }];
+  })) as Record<SoundEngineType, { drones: string[]; rhythmic: string[] }>;
+})();
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -484,22 +488,31 @@ export class WorldCreator {
       <div class="wc-engine-tabs">`;
     for (const tab of ENGINE_TABS) {
       const isActive = this.activeEngine === tab.engine;
-      html += `<button class="wc-engine-tab${isActive ? ' wc-tab-active' : ''}" data-action="pick-engine" data-engine="${tab.engine}" style="background:${tab.bg};border-color:${tab.border};color:${tab.color};">${tab.label}</button>`;
+      const { drones, rhythmic } = ARCHETYPES_BY_ENGINE[tab.engine];
+      const total = drones.length + rhythmic.length;
+      html += `<button class="wc-engine-tab${isActive ? ' wc-tab-active' : ''}" data-action="pick-engine" data-engine="${tab.engine}" style="background:${tab.bg};border-color:${tab.border};color:${tab.color};">${tab.label}<span style="display:block;font-size:10px;opacity:0.7;margin-top:2px;">${total}</span></button>`;
     }
     html += `</div>`;
 
-    // Show archetypes for selected engine tab (pre-sorted alphabetically)
-    const archNames = ARCHETYPES_BY_ENGINE[this.activeEngine];
-    if (archNames.length > 0) {
-      html += `<div class="wc-arch-list">`;
-      for (const archName of archNames) {
+    // Show archetypes for selected engine tab: drones first, then rhythmic
+    const { drones: droneNames, rhythmic: rhythmicNames } = ARCHETYPES_BY_ENGINE[this.activeEngine];
+    const renderArchGroup = (names: string[], groupLabel: string) => {
+      if (names.length === 0) return '';
+      let g = `<div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#3a6a8a;margin:8px 0 4px;">${groupLabel}</div>`;
+      g += `<div class="wc-arch-list" style="margin-top:0;">`;
+      for (const archName of names) {
         const isSelected = this.placement.kind === 'source' && this.placement.archetypeName === archName;
         const hue = hashString(archName) % 360;
         const color = hslStr(hue, 75, isSelected ? 75 : 60);
         const borderColor = isSelected ? hslStr(hue, 80, 65) : '#1a3550';
-        html += `<div class="wc-arch-item${isSelected ? ' wc-arch-selected' : ''}" data-action="pick-archetype" data-name="${archName}" style="color:${color};border-color:${borderColor};">${archName}</div>`;
+        g += `<div class="wc-arch-item${isSelected ? ' wc-arch-selected' : ''}" data-action="pick-archetype" data-name="${archName}" style="color:${color};border-color:${borderColor};">${archName}</div>`;
       }
-      html += `</div>`;
+      g += `</div>`;
+      return g;
+    };
+    if (droneNames.length + rhythmicNames.length > 0) {
+      html += renderArchGroup(droneNames, 'Drones');
+      html += renderArchGroup(rhythmicNames, 'Rhythmic');
     }
 
     // Placed sources list
@@ -510,9 +523,14 @@ export class WorldCreator {
         const isSelected = this.selectedSourceId === src.id;
         const hue = hashString(src.archetypeName) % 360;
         const dotColor = hslStr(hue, 80, 60);
+        const arch = ARCHETYPES.find(a => a.name === src.archetypeName);
+        const eng = arch?.engine ?? 'subtractive';
+        const engTab = ENGINE_TABS.find(t => t.engine === eng)!;
+        const engBadge = `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${engTab.bg};border:1px solid ${engTab.border};color:${engTab.color};flex-shrink:0;">${engTab.label}</span>`;
         html += `<div class="wc-item-row${isSelected ? ' wc-item-selected' : ''}" data-action="select-source" data-id="${src.id}">
           <div class="wc-item-dot" style="background:${dotColor};"></div>
           <span class="wc-item-name">${this.escapeHtml(src.archetypeName)}</span>
+          ${engBadge}
           <span style="font-size:11px;color:#4a7a96;">${src.position.lat.toFixed(0)},${src.position.lon.toFixed(0)}</span>
           <button class="wc-item-del" data-action="del-source" data-id="${src.id}">&times;</button>
         </div>`;
